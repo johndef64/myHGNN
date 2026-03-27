@@ -1,28 +1,36 @@
 """
-Benchmark script: KGE classical methods (DistMult, TransE, RotatE) on FB15k-237 and WN18RR.
+Benchmark script: Heterogeneous GNN methods (R-GCN, R-GAT, CompGCN) for link prediction
+on standard KG benchmarks: FB15k-237 and WN18RR.
 
-Uses paper-standard hyperparameters (config lp-benchmark, 200-dim, BCE + label smoothing).
-Saves results to reports/kge_lp_benchmark_<timestamp>.{json,txt}
+Uses BCE + label smoothing 0.1 (as in the CompGCN paper), paper-standard hyperparameters
+(config lp-benchmark = 200-dim embeddings).
+Saves results to reports/gnn_lp_benchmark_<timestamp>.{json,txt}
 
 Paper reference values (filtered, full-graph ranking):
-  FB15k-237: DistMult=0.241, TransE=0.294, RotatE=0.338  (MRR)
-  WN18RR:    DistMult=0.430, TransE=0.226, RotatE=0.476  (MRR)
 
-Note on loss function:
-  - DistMult and RotatE use BCE + label smoothing 0.1 (as in CompGCN paper setup).
-  - TransE uses pairwise margin loss (margin=1.0), matching the original paper
-    (Bordes et al. 2013). This is the correct loss for TransE's translation assumption.
-  - RotatE originally uses self-adversarial negative sampling; here we use filtered
-    uniform sampling, which may yield slightly lower results than the original paper.
+  FB15k-237 (from Vashishth et al. 2020, CompGCN — ICLR):
+    R-GCN+DistMult : MRR=0.249  H@1=0.151  H@3=0.264  H@10=0.417
+    CompGCN+DistMult: MRR=0.355  H@1=0.264  H@3=0.390  H@10=0.535
 
-  - If TransE uses BCE without smoothing: the original paper uses margin loss (not BCE),
-    so TransE results may differ from paper values.
-    
+  WN18RR (from Vashishth et al. 2020, CompGCN — ICLR):
+    CompGCN+DistMult: MRR=0.479  H@1=0.443  H@3=0.494  H@10=0.546
+
+Notes:
+  - R-GCN is evaluated with DistMult decoder (as in CompGCN paper setup).
+  - R-GAT does not have widely reported results on these benchmarks; results here
+    serve as a novel comparison point.
+  - R-GCN original paper (Schlichtkrull et al. 2018) used FB15k and WN18
+    (non-standard splits), so direct comparison is not straightforward.
+  - All models use filtered full-graph ranking (standard for these benchmarks).
+  - ogbl-biokg uses type-constrained evaluation (too large for full-graph ranking).
+
 Usage:
-  python benchmark_kge_lp.py                            # all models, fb15k-237 + wn18rr
-  python benchmark_kge_lp.py --runs 3 --epochs 500
-  python benchmark_kge_lp.py --models transe rotate --benchmarks wn18rr
-  python benchmark_kge_lp.py --config lp-benchmark-64  # faster, 64-dim
+  python benchmark_gnn_lp.py                              # all models, fb15k-237 + wn18rr
+  python benchmark_gnn_lp.py --runs 3 --epochs 500
+  python benchmark_gnn_lp.py --models compgcn --benchmarks wn18rr
+  python benchmark_gnn_lp.py --models rgcn rgat --benchmarks fb15k-237
+  python benchmark_gnn_lp.py --config lp-benchmark-64    # faster, 64-dim
+  python benchmark_gnn_lp.py --benchmarks ogbl-biokg --models compgcn
 """
 
 import os
@@ -50,44 +58,59 @@ BASE_SEED = 42
 
 # ─── Paper reference values ───────────────────────────────────────────────────
 # Sources:
-#   DistMult: Yang et al. 2015 / Kadlec et al. 2017 (re-eval)
-#   TransE:   Bordes et al. 2013 / re-evaluated with filtered ranking
-#   RotatE:   Sun et al. 2019 (ICLR)
+#   R-GCN:    Schlichtkrull et al. 2018 (ESWC) — original paper uses FB15k/WN18,
+#             not FB15k-237/WN18RR. Values below are from the CompGCN paper
+#             (Vashishth et al. 2020, ICLR), Table 3 — R-GCN re-evaluated with
+#             DistMult decoder on FB15k-237.
+#   R-GAT:    No standard widely cited values on these benchmarks.
+#   CompGCN:  Vashishth et al. 2020 (ICLR), Table 3 — CompGCN + DistMult decoder.
 PAPER_RESULTS = {
     'fb15k-237': {
-        'distmult_kge': {'MRR': 0.241, 'Hits@1': 0.155, 'Hits@3': 0.263, 'Hits@10': 0.419},
-        'transe':        {'MRR': 0.294, 'Hits@1': 0.202, 'Hits@3': 0.326, 'Hits@10': 0.465},
-        'rotate':        {'MRR': 0.338, 'Hits@1': 0.241, 'Hits@3': 0.375, 'Hits@10': 0.533},
+        'rgcn':    {'MRR': 0.249, 'Hits@1': 0.151, 'Hits@3': 0.264, 'Hits@10': 0.417},
+        'compgcn': {'MRR': 0.355, 'Hits@1': 0.264, 'Hits@3': 0.390, 'Hits@10': 0.535},
+        # R-GAT: no canonical reference value — novel comparison
     },
     'wn18rr': {
-        'distmult_kge': {'MRR': 0.430, 'Hits@1': 0.390, 'Hits@3': 0.440, 'Hits@10': 0.490},
-        'transe':        {'MRR': 0.226, 'Hits@1': 0.011, 'Hits@3': 0.401, 'Hits@10': 0.501},
-        'rotate':        {'MRR': 0.476, 'Hits@1': 0.428, 'Hits@3': 0.492, 'Hits@10': 0.571},
+        'compgcn': {'MRR': 0.479, 'Hits@1': 0.443, 'Hits@3': 0.494, 'Hits@10': 0.546},
+        # R-GCN and R-GAT: not widely reported on WN18RR with DistMult decoder
     },
-}
-# → MRR=0.3877  H@1=0.3732  H@3=0.3949  H@10=0.4118
-
-# Loss function per model
-_LOSS_FN = {
-    'distmult_kge': 'bce',
-    'transe':        'margin',   # paper Bordes 2013: pairwise margin loss
-    'rotate':        'bce',
-}
-# Label smoothing (bce only; unused for margin)
-_LABEL_SMOOTHING = {
-    'distmult_kge': 0.1,
-    'transe':        0.0,
-    'rotate':        0.1,
-}
-# Pairwise margin for TransE (unused for bce models)
-_MARGIN = {
-    'distmult_kge': 1.0,
-    'transe':        1.0,
-    'rotate':        1.0,
+    'ogbl-biokg': {
+        # ogbl-biokg uses type-constrained evaluation; CompGCN paper does not report
+        # on this benchmark. OGB leaderboard values vary by implementation.
+    },
 }
 
 ALL_BENCHMARKS = ['fb15k-237', 'wn18rr']
-ALL_MODELS = ['distmult_kge', 'transe', 'rotate']
+ALL_MODELS = ['rgcn', 'rgat', 'compgcn']
+
+
+# ─── Encoder kwargs for R-GAT ─────────────────────────────────────────────────
+
+def _make_encoder_kwargs(model_name, train_index):
+    """
+    R-GAT requires edges sorted by relation type and a change_points vector.
+    All other models: no extra kwargs.
+
+    Args:
+        model_name: str
+        train_index: LongTensor [N, 3] — (head, relation, tail) message-passing edges.
+
+    Returns:
+        (sorted_train_index, encoder_kwargs dict)
+    """
+    if model_name != 'rgat':
+        return train_index, {}
+
+    # Sort by relation id so R-GAT can process each relation block contiguously
+    sort_idx = train_index[:, 1].argsort()
+    train_index = train_index[sort_idx]
+    rel_ids = train_index[:, 1]
+    change_points = torch.cat([
+        torch.tensor([0], device=train_index.device),
+        (rel_ids[1:] != rel_ids[:-1]).nonzero(as_tuple=False).view(-1) + 1,
+        torch.tensor([rel_ids.size(0)], device=train_index.device),
+    ])
+    return train_index, {'change_points': change_points}
 
 
 # ─── Single experiment ────────────────────────────────────────────────────────
@@ -96,17 +119,15 @@ def run_experiment(benchmark, model_name, config_name, runs, epochs, patience,
                    neg_batch_size, evaluate_every):
     """Train and evaluate one (benchmark, model) combination. Returns metrics dict."""
 
-    loss_fn       = _LOSS_FN.get(model_name, 'bce')
-    label_smoothing = _LABEL_SMOOTHING.get(model_name, 0.1)
-    margin        = _MARGIN.get(model_name, 1.0)
     loss_kwargs = dict(
-        loss_fn=loss_fn,
-        label_smoothing=label_smoothing,
-        alpha=0.25, gamma=3.0, alpha_adv=2.0,   # focal params, ignored for bce/margin
-        margin=margin,
+        loss_fn='bce',
+        label_smoothing=0.1,            # as in CompGCN paper
+        alpha=0.25, gamma=3.0, alpha_adv=2.0,   # focal params, ignored with loss='bce'
     )
-    # FB15k-237 and WN18RR are homogeneous: standard full-graph filtered ranking
-    use_type_constrained = False
+
+    # FB15k-237 and WN18RR are homogeneous (one entity type) → full-graph filtered ranking
+    # ogbl-biokg is heterogeneous and large → type-constrained ranking
+    use_type_constrained = (benchmark == 'ogbl-biokg')
 
     all_run_metrics = []
 
@@ -123,18 +144,20 @@ def run_experiment(benchmark, model_name, config_name, runs, epochs, patience,
         encoder = encoder.to(device)
         decoder = decoder.to(device)
 
-        train_index = torch.tensor(ds['train_index']).to(device)
+        train_index_raw = torch.tensor(ds['train_index']).to(device)
+        train_index, encoder_kwargs = _make_encoder_kwargs(model_name, train_index_raw)
+
         features = {nt: (f.to(device) if f is not None else None)
                     for nt, f in ds['flattened_features'].items()}
-        train_triplets = ds['train_triplets']
-        val_triplets   = ds['val_triplets']
-        test_triplets  = ds['test_triplets']
+        train_triplets          = ds['train_triplets']
+        val_triplets            = ds['val_triplets']
+        test_triplets           = ds['test_triplets']
         train_val_triplets      = ds['train_val_triplets'].to(device)
         train_val_test_triplets = ds['train_val_test_triplets'].to(device)
 
         all_entities_arr = np.arange(ds['num_entities'])
-        all_true_arr = train_val_test_triplets.cpu().numpy()
-        reg_param = mp.get('regularization', 1e-5)
+        all_true_arr     = train_val_test_triplets.cpu().numpy()
+        reg_param        = mp.get('regularization', 1e-5)
 
         all_params = list(encoder.parameters()) + list(decoder.parameters())
         optimizer = torch.optim.AdamW(
@@ -151,7 +174,7 @@ def run_experiment(benchmark, model_name, config_name, runs, epochs, patience,
 
         with trange(1, epochs + 1, desc=f'    {benchmark}/{model_name}') as pbar:
             for epoch in pbar:
-                # Mini-batch positive subsampling (optional)
+                # Mini-batch positive subsampling (optional, useful for large benchmarks)
                 if neg_batch_size > 0 and len(train_triplets) > neg_batch_size:
                     idx = rng_batch.choice(len(train_triplets), size=neg_batch_size, replace=False)
                     batch_triplets = train_triplets[idx]
@@ -166,11 +189,11 @@ def run_experiment(benchmark, model_name, config_name, runs, epochs, patience,
                 train_m = train_step(
                     encoder, decoder, optimizer, mp['grad_norm'], reg_param,
                     features, train_index, neg_trips, neg_labels,
-                    **loss_kwargs,
+                    **loss_kwargs, **encoder_kwargs,
                 )
                 scheduler.step()
 
-                # Validation (sampled MRR — fast)
+                # Validation: sampled MRR (fast proxy during training)
                 if epoch % evaluate_every == 0:
                     val_neg, val_lab = negative_sampling_filtered(
                         val_triplets, all_entities_arr, 1, all_true_arr, seed=seed + 1000
@@ -183,6 +206,7 @@ def run_experiment(benchmark, model_name, config_name, runs, epochs, patience,
                         **loss_kwargs,
                         eval_filtered=False,   # sampled during training for speed
                         use_type_constrained=use_type_constrained,
+                        **encoder_kwargs,
                     )
 
                     if val_m['Loss'] < best_val_loss:
@@ -209,7 +233,8 @@ def run_experiment(benchmark, model_name, config_name, runs, epochs, patience,
             encoder.load_state_dict({k: v.to(device) for k, v in best_state['encoder'].items()})
             decoder.load_state_dict({k: v.to(device) for k, v in best_state['decoder'].items()})
 
-        # Test: full filtered ranking (all entities)
+        # Test: full filtered ranking (all entities for FB15k-237/WN18RR,
+        #       type-constrained for ogbl-biokg)
         test_neg, test_lab = negative_sampling_filtered(
             test_triplets, all_entities_arr, 1, all_true_arr, seed=seed + 2000
         )
@@ -223,6 +248,7 @@ def run_experiment(benchmark, model_name, config_name, runs, epochs, patience,
             all_target_triplets=train_val_test_triplets,
             num_entities=ds['num_entities'],
             use_type_constrained=use_type_constrained,
+            **encoder_kwargs,
         )
 
         run_result = {
@@ -259,22 +285,34 @@ def build_text_report(results, args):
     ts = time.strftime('%Y-%m-%d %H:%M:%S')
     lines = [
         '=' * 70,
-        'KGE Link Prediction Benchmark Results',
+        'GNN Link Prediction Benchmark Results',
         f'Generated : {ts}',
         f'Config    : {args.config}',
         f'Epochs    : {args.epochs}  |  Patience: {args.patience}  |  Runs: {args.runs}',
         f'Device    : {device}',
+        f'Loss      : BCE + label smoothing 0.1 (as in CompGCN paper)',
+        '=' * 70,
+        '',
+        'Paper references:',
+        '  R-GCN (FB15k-237)  — Vashishth et al. 2020, CompGCN (ICLR), Table 3',
+        '  CompGCN (FB15k-237, WN18RR) — Vashishth et al. 2020, CompGCN (ICLR), Table 3',
+        '  R-GAT — no canonical reference on these benchmarks (novel baseline)',
         '=' * 70,
     ]
     for benchmark in args.benchmarks:
         lines.append(f'\n{benchmark.upper()}')
         lines.append('-' * len(benchmark))
+        if benchmark == 'ogbl-biokg':
+            lines.append('  [type-constrained evaluation — full-graph ranking not feasible]')
         for model in args.models:
             key = f'{benchmark}/{model}'
             if key not in results:
                 lines.append(f'  {model:<16} [skipped / failed]')
                 continue
             r = results[key]
+            if 'error' in r:
+                lines.append(f'  {model:<16} [ERROR: {r["error"]}]')
+                continue
             paper = PAPER_RESULTS.get(benchmark, {}).get(model)
             lines.append(_fmt_row(model, r['avg'], r['std'], paper))
     lines.append('\n' + '=' * 70)
@@ -286,14 +324,15 @@ def build_text_report(results, args):
 def main(args):
     os.makedirs('reports', exist_ok=True)
     ts = time.strftime('%Y%m%d_%H%M%S')
-    json_path = f'reports/kge_lp_benchmark_{ts}.json'
-    txt_path  = f'reports/kge_lp_benchmark_{ts}.txt'
+    json_path = f'reports/gnn_lp_benchmark_{ts}.json'
+    txt_path  = f'reports/gnn_lp_benchmark_{ts}.txt'
 
-    print(f'[i] Device: {device}')
+    print(f'[i] Device    : {device}')
     print(f'[i] Benchmarks: {args.benchmarks}')
     print(f'[i] Models    : {args.models}')
     print(f'[i] Config    : {args.config}')
     print(f'[i] Epochs    : {args.epochs}  Patience: {args.patience}  Runs: {args.runs}')
+    print(f'[i] Loss      : BCE + label smoothing 0.1')
     print()
 
     results = {}
@@ -339,15 +378,16 @@ def main(args):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='KGE Link Prediction Benchmark')
+    parser = argparse.ArgumentParser(description='GNN Link Prediction Benchmark')
     parser.add_argument('--benchmarks', nargs='+', default=ALL_BENCHMARKS,
-                        choices=ALL_BENCHMARKS,
+                        choices=['fb15k-237', 'wn18rr', 'ogbl-biokg'],
                         help='Benchmarks to test (default: fb15k-237 wn18rr)')
     parser.add_argument('--models', nargs='+', default=ALL_MODELS,
                         choices=ALL_MODELS,
-                        help='KGE models to test (default: distmult_kge transe rotate)')
+                        help='GNN models to test (default: rgcn rgat compgcn)')
     parser.add_argument('--config', type=str, default='lp-benchmark',
-                        help='Config name from models_params.json (default: lp-benchmark = 200-dim)')
+                        help='Config name from models_params.json '
+                             '(default: lp-benchmark = 200-dim, as in CompGCN paper)')
     parser.add_argument('--runs', type=int, default=1,
                         help='Number of runs per experiment (default: 1)')
     parser.add_argument('--epochs', type=int, default=500,
@@ -357,6 +397,7 @@ if __name__ == '__main__':
     parser.add_argument('--evaluate_every', type=int, default=10,
                         help='Validate every N epochs (default: 10)')
     parser.add_argument('--neg_batch_size', type=int, default=0,
-                        help='Positive batch size before neg sampling. 0=full batch (default: 0)')
+                        help='Positive batch size before neg sampling. '
+                             '0=full batch. Use e.g. 4096 for ogbl-biokg. (default: 0)')
     args = parser.parse_args()
     main(args)

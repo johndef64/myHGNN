@@ -132,7 +132,16 @@ class RotatEEncoder(nn.Module):
         nn.init.uniform_(self.rel_emb.weight, -math.pi, math.pi)
 
     def forward(self, x_dict, edge_index, **kwargs):
-        return self.drop(self.entity_emb.weight), self.rel_emb.weight
+        d = self.emb_dim
+        ent = self.entity_emb.weight          # [N, 2d]
+        h_re, h_im = ent[:, :d], ent[:, d:]  # [N, d] each
+        # Unit-modulus constraint (RotatE paper §3): normalize each complex
+        # dimension so |h_k| = 1.  Without this, AdamW weight-decay collapses
+        # all embeddings toward zero, making every score equal to gamma and
+        # the ranking completely random.
+        modulus = (h_re.pow(2) + h_im.pow(2)).sqrt().clamp(min=1e-8)
+        ent_norm = torch.cat([h_re / modulus, h_im / modulus], dim=-1)
+        return self.drop(ent_norm), self.rel_emb.weight
 
 
 class Node2VecEncoder(KGEEncoder):

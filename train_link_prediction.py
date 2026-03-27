@@ -110,18 +110,24 @@ def compute_loss(decoder, node_emb, rel_emb, triplets, labels,
                  # focal-specific
                  alpha=0.25, gamma=1.0, alpha_adv=2.0,
                  # bce-specific
-                 label_smoothing=0.0):
+                 label_smoothing=0.0,
+                 # margin-specific (TransE)
+                 margin=1.0):
     """
     Unified loss dispatcher.
 
     Args:
-        loss_fn: 'focal' | 'bce'
-            - 'focal': Focal Loss + adversarial hard-negative weighting.
-                       Utile per dataset sbilanciati (PathogenKG, DRKG).
-                       Parametri: alpha, gamma, alpha_adv.
-            - 'bce':   BCE standard con label smoothing opzionale.
-                       Come usato nel paper CompGCN (FB15k-237, WN18RR).
-                       Parametro: label_smoothing (0.0 = nessuno, 0.1 = paper).
+        loss_fn: 'focal' | 'bce' | 'margin'
+            - 'focal':  Focal Loss + adversarial hard-negative weighting.
+                        Utile per dataset sbilanciati (PathogenKG, DRKG).
+                        Parametri: alpha, gamma, alpha_adv.
+            - 'bce':    BCE standard con label smoothing opzionale.
+                        Come usato nel paper CompGCN (FB15k-237, WN18RR).
+                        Parametro: label_smoothing (0.0 = nessuno, 0.1 = paper).
+            - 'margin': Pairwise margin loss (TransE paper, Bordes 2013).
+                        max(0, margin - score_pos + score_neg).
+                        Richiede batch layout [pos | neg] da negative_sampling.
+                        Parametro: margin (default 1.0).
         reg_param: coefficiente per la L2 regularization sugli embedding.
 
     Returns:
@@ -158,8 +164,24 @@ def compute_loss(decoder, node_emb, rel_emb, triplets, labels,
 
         task_loss = pos_loss + neg_loss
 
+    elif loss_fn == 'margin':
+        # ── Pairwise margin loss (TransE paper) ────────────────────────────
+        # L = mean max(0, margin - score(pos) + score(neg))
+        # Batch layout emesso da negative_sampling: [pos | neg] con rate negativi
+        # per ogni positivo, quindi neg.size(0) / pos.size(0) = rate.
+        pos_mask = labels.bool()
+        pos_scores = raw_logits[pos_mask]    # [n_pos]
+        neg_scores = raw_logits[~pos_mask]   # [n_pos * rate]
+        n_pos = pos_scores.size(0)
+        if n_pos == 0 or neg_scores.size(0) == 0:
+            task_loss = raw_logits.new_tensor(0.0)
+        else:
+            rate = neg_scores.size(0) // n_pos
+            neg_mat = neg_scores.view(n_pos, max(rate, 1))   # [n_pos, rate]
+            task_loss = F.relu(margin - pos_scores.unsqueeze(1) + neg_mat).mean()
+
     else:
-        raise ValueError(f"loss_fn must be 'bce' or 'focal', got '{loss_fn}'")
+        raise ValueError(f"loss_fn must be 'bce', 'focal' or 'margin', got '{loss_fn}'")
 
     total_loss = task_loss + reg_param * reg_loss
     scores = torch.sigmoid(raw_logits)   # un solo sigmoid, su raw_logits
@@ -388,9 +410,20 @@ def main(args):
 
     print(f'[i] Test evaluation: {"type-constrained" if use_type_constrained else "full-graph"} filtered ranking')
 
-    print(f"[i] Loss function: {args.loss}"
-          + (f" (label_smoothing={args.label_smoothing})" if args.loss == 'bce' else
-             f" (alpha={args.alpha}, gamma={args.gamma}, alpha_adv={args.alpha_adv})"))
+    # Auto-switch loss for TransE: margin loss is the correct choice (paper Bordes 2013)
+    if args.loss == 'auto':
+        args.loss = 'margin' if args.model == 'transe' else 'focal'
+        print(f'[i] Auto loss → {args.loss}')
+    elif args.model == 'transe' and args.loss in ('focal', 'bce'):
+        print(f'[!] TransE with {args.loss} loss: suboptimal (designed for margin loss). '
+              f'Consider --loss margin.')
+
+    if args.loss == 'bce':
+        print(f"[i] Loss: bce (label_smoothing={args.label_smoothing})")
+    elif args.loss == 'margin':
+        print(f"[i] Loss: margin (margin={args.margin})")
+    else:
+        print(f"[i] Loss: focal (alpha={args.alpha}, gamma={args.gamma}, alpha_adv={args.alpha_adv})")
 
     models_params_path = './src/models_params.json'
     all_run_metrics = []
@@ -406,6 +439,7 @@ def main(args):
         gamma=args.gamma,
         alpha_adv=args.alpha_adv,
         label_smoothing=args.label_smoothing,
+        margin=args.margin,
     )
 
     for run_i in range(args.runs):
@@ -633,19 +667,24 @@ if __name__ == '__main__':
     parser.add_argument('--undersample_rate', type=float, default=0.5)
 
     # ── Loss function ──────────────────────────────────────────────────────────
-    parser.add_argument('--loss', type=str, default='focal', choices=['bce', 'focal'],
-                        help="Loss function. 'bce' = BCE con label smoothing (come il paper CompGCN, "
-                             "raccomandato per benchmark). 'focal' = Focal Loss + adversarial weighting "
-                             "(utile per dataset sbilanciati). Default: focal.")
+    parser.add_argument('--loss', type=str, default='auto',
+                        choices=['bce', 'focal', 'margin', 'auto'],
+                        help="Loss function. 'auto' = margin per TransE, focal per gli altri. "
+                             "'bce' = BCE + label smoothing (CompGCN paper). "
+                             "'focal' = Focal Loss + adversarial weighting (dataset sbilanciati). "
+                             "'margin' = Pairwise margin loss (TransE paper). Default: auto.")
     parser.add_argument('--label_smoothing', type=float, default=0.0,
-                        help="Label smoothing per la BCE loss (es. 0.1). Ignorato se --loss focal.")
+                        help="Label smoothing per la BCE loss (es. 0.1). Ignorato se --loss focal/margin.")
     # focal-specific
     parser.add_argument('--alpha', type=float, default=0.25,
-                        help="Focal loss alpha. Ignorato se --loss bce.")
+                        help="Focal loss alpha. Ignorato se --loss bce/margin.")
     parser.add_argument('--gamma', type=float, default=3.0,
-                        help="Focal loss gamma. Ignorato se --loss bce.")
+                        help="Focal loss gamma. Ignorato se --loss bce/margin.")
     parser.add_argument('--alpha_adv', type=float, default=2.0,
-                        help="Adversarial weighting temperature. Ignorato se --loss bce.")
+                        help="Adversarial weighting temperature. Ignorato se --loss bce/margin.")
+    # margin-specific
+    parser.add_argument('--margin', type=float, default=1.0,
+                        help="Margin for pairwise margin loss (TransE). Ignorato se --loss bce/focal.")
     # ──────────────────────────────────────────────────────────────────────────
 
     parser.add_argument('--eval_filtered', action='store_true', default=True)
