@@ -118,30 +118,32 @@ class RotatEEncoder(nn.Module):
         self.num_entities = num_entities
         self.num_relations = num_relations
         self.device = device
+        self.gamma = kwargs.get('gamma', 12.0)   # needed for embedding_range init
 
         # Complex entity embeddings stored as [N, 2*d] (real | imag)
         self.entity_emb = nn.Embedding(num_entities, 2 * mlp_out_emb_size)
-        # Relation rotation phases
+        # Relation rotation phases stored in [-pi, pi]
         self.rel_emb = nn.Embedding(num_relations, mlp_out_emb_size)
         self.drop = nn.Dropout(dropout)
 
         self._reset_parameters()
 
     def _reset_parameters(self):
-        nn.init.uniform_(self.entity_emb.weight, -1.0, 1.0)
+        # RotatE paper (Sun et al. 2019): initialize entity embeddings in
+        # [-embedding_range, embedding_range] so that the initial sum of
+        # per-dimension complex moduli is comparable to gamma.
+        # embedding_range = (gamma + epsilon) / d  → distances ≈ gamma at init.
+        epsilon = 2.0
+        embedding_range = (self.gamma + epsilon) / self.emb_dim
+        nn.init.uniform_(self.entity_emb.weight, -embedding_range, embedding_range)
         nn.init.uniform_(self.rel_emb.weight, -math.pi, math.pi)
 
     def forward(self, x_dict, edge_index, **kwargs):
-        d = self.emb_dim
-        ent = self.entity_emb.weight          # [N, 2d]
-        h_re, h_im = ent[:, :d], ent[:, d:]  # [N, d] each
-        # Unit-modulus constraint (RotatE paper §3): normalize each complex
-        # dimension so |h_k| = 1.  Without this, AdamW weight-decay collapses
-        # all embeddings toward zero, making every score equal to gamma and
-        # the ranking completely random.
-        modulus = (h_re.pow(2) + h_im.pow(2)).sqrt().clamp(min=1e-8)
-        ent_norm = torch.cat([h_re / modulus, h_im / modulus], dim=-1)
-        return self.drop(ent_norm), self.rel_emb.weight
+        # No hard constraint on entity moduli: entities grow naturally during
+        # training.  weight_decay must be 0 for RotatE parameters to prevent
+        # entity embeddings collapsing toward zero (which makes all distances
+        # collapse to 0 and all scores equal gamma → random ranking).
+        return self.drop(self.entity_emb.weight), self.rel_emb.weight
 
 
 class Node2VecEncoder(KGEEncoder):
