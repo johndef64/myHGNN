@@ -1,0 +1,612 @@
+{
+    "pathogen31-cmp-gene": {
+        "rgcn": {
+            "conv_layer_num": 2,
+            "layer_0": 200,
+            "layer_1": 64,
+            "layer_2": 200,
+            "grad_norm": 1.5,
+            "num_bases": 15,
+            "model_name": "rgcn",
+            "learning_rate": 0.001,
+            "mlp_out_layer": 128,
+            "regularization": 0.0001,
+            "weight_decay": 0.05,
+            "scheduler_gamma": 0.997
+        },
+        "rgat": {},
+        "compgcn": {
+            "conv_layer_num": 1,
+            "dropout": 0.3,
+            "layer_0": 128,
+            "layer_1": 128,
+            "layer_2": 128,
+            "mlp_out_layer": 200,
+            "learning_rate": 0.001,
+            "model_name": "compgcn",
+            "opn": "corr",
+            "grad_norm": 2,
+            "num_bases": 15,
+            "regularization": 0.005,
+            "weight_decay": 0.05,
+            "scheduler_gamma": 0.997
+        }
+    },
+    "pathogen31-64": {
+        "compgcn": {
+            "conv_layer_num": 2,
+            "dropout": 0.4,
+            "layer_0": 64,
+            "layer_1": 64,
+            "mlp_out_layer": 64,
+            "learning_rate": 0.0001,
+            "model_name": "compgcn",
+            "opn": "sub",
+            "grad_norm": 1.0,
+            "regularization": 0.001,
+            "weight_decay": 0.01,
+            "scheduler_gamma": 0.995
+        },
+        "rcgn": {
+            "conv_layer_num": 2,
+            "layer_0": 64,
+            "layer_1": 64,
+            "mlp_out_layer": 64,
+            "learning_rate": 0.0001,
+            "model_name": "rgcn",
+            "num_bases": 30,
+            "grad_norm": 1.0,
+            "regularization": 0.001,
+            "weight_decay": 0.01,
+            "scheduler_gamma": 0.995
+        }
+    },
+    "pathogen31-128": {
+        "rgcn": {
+            "conv_layer_num": 2,
+            "layer_0": 128,
+            "layer_1": 128,
+            "mlp_out_layer": 128,
+            "learning_rate": 0.0001,
+            "num_bases": 15,
+            "grad_norm": 1.0,
+            "regularization": 0.005,
+            "weight_decay": 0.01,
+            "scheduler_gamma": 0.995
+        },
+        "compgcn": {
+            "conv_layer_num": 2,
+            "dropout": 0.5,
+            "layer_0": 128,
+            "layer_1": 128,
+            "mlp_out_layer": 128,
+            "learning_rate": 0.0001,
+            "opn": "sub",
+            "grad_norm": 1.0,
+            "regularization": 0.005,
+            "weight_decay": 0.01,
+            "scheduler_gamma": 0.995
+        }
+    },
+    "BIOKG-200": {
+        "_comment": "Parametri calibrati per KG biomedici su scala DRKG (~47K-97K nodi, ~4-6M triple). Basati su: CompGCN paper (Vashishth 2020), DRKG official (TransE dim=400), letteratura drug repurposing. I parametri PathogenKG originali sono mantenuti sotto 'pathogen31-cmp-gene'.",
+        "rgcn": {
+            "conv_layer_num": 2,
+            "layer_0": 200,
+            "layer_1": 200,
+            "mlp_out_layer": 200,
+            "learning_rate": 0.001,
+            "num_bases": 30,
+            "grad_norm": 1.0,
+            "regularization": 1e-05,
+            "weight_decay": 0.01,
+            "scheduler_gamma": 0.995
+        },
+        "rgat": {
+            "conv_layer_num": 2,
+            "layer_0": 200,
+            "layer_1": 200,
+            "mlp_out_layer": 200,
+            "learning_rate": 0.001,
+            "num_bases": 30,
+            "grad_norm": 1.0,
+            "regularization": 1e-05,
+            "weight_decay": 0.01,
+            "scheduler_gamma": 0.995
+        },
+        "compgcn": {
+            "conv_layer_num": 2,
+            "dropout": 0.3,
+            "layer_0": 200,
+            "layer_1": 200,
+            "mlp_out_layer": 200,
+            "learning_rate": 0.001,
+            "opn": "sub",
+            "grad_norm": 1.0,
+            "regularization": 1e-05,
+            "weight_decay": 0.01,
+            "scheduler_gamma": 0.995
+        },
+        "distmult_kge": {
+            "conv_layer_num": 0, "mlp_out_layer": 200, "dropout": 0.0,
+            "learning_rate": 0.001, "grad_norm": 1.0,
+            "regularization": 1e-5, "weight_decay": 0.01, "scheduler_gamma": 0.995
+        },
+        "transe": {
+            "conv_layer_num": 0, "mlp_out_layer": 200, "dropout": 0.0,
+            "learning_rate": 0.001, "grad_norm": 1.0,
+            "regularization": 1e-5, "weight_decay": 0.01, "scheduler_gamma": 0.995,
+            "gamma": 12.0, "p_norm": 1
+        },
+        "rotate": {
+            "conv_layer_num": 0, "mlp_out_layer": 200, "dropout": 0.0,
+            "learning_rate": 0.001, "grad_norm": 1.0,
+            "regularization": 1e-5, "weight_decay": 0.01, "scheduler_gamma": 0.995,
+            "gamma": 12.0
+        },
+        "node2vec": {
+            "conv_layer_num": 0, "mlp_out_layer": 128, "dropout": 0.0,
+            "learning_rate": 0.001, "grad_norm": 1.0,
+            "regularization": 1e-5, "weight_decay": 0.01, "scheduler_gamma": 0.995,
+            "walk_length": 20, "context_size": 10, "walks_per_node": 10,
+            "p": 1.0, "q": 1.0, "pretrain_epochs": 5
+        }
+    },
+    "BIOKG-128": {
+        "_comment": "Parametri calibrati per KG biomedici su scala DRKG (~47K-97K nodi, ~4-6M triple). Basati su: CompGCN paper (Vashishth 2020), DRKG official (TransE dim=400), letteratura drug repurposing. I parametri PathogenKG originali sono mantenuti sotto 'pathogen31-cmp-gene'.",
+        "rgcn": {
+            "conv_layer_num": 2,
+            "layer_0": 128,
+            "layer_1": 128,
+            "mlp_out_layer": 128,
+            "learning_rate": 0.001,
+            "num_bases": 30,
+            "grad_norm": 1.0,
+            "regularization": 1e-05,
+            "weight_decay": 0.01,
+            "scheduler_gamma": 0.995
+        },
+        "rgat": {
+            "conv_layer_num": 2,
+            "layer_0": 128,
+            "layer_1": 128,
+            "mlp_out_layer": 128,
+            "learning_rate": 0.001,
+            "num_bases": 30,
+            "grad_norm": 1.0,
+            "regularization": 1e-05,
+            "weight_decay": 0.01,
+            "scheduler_gamma": 0.995
+        },
+        "compgcn": {
+            "conv_layer_num": 2,
+            "dropout": 0.3,
+            "layer_0": 128,
+            "layer_1": 128,
+            "mlp_out_layer": 128,
+            "learning_rate": 0.001,
+            "opn": "sub",
+            "grad_norm": 1.0,
+            "regularization": 1e-05,
+            "weight_decay": 0.01,
+            "scheduler_gamma": 0.995
+        }
+    },
+    "BIOKG-64": {
+        "_comment": "Parametri calibrati per KG biomedici su scala DRKG (~47K-97K nodi, ~4-6M triple). Basati su: CompGCN paper (Vashishth 2020), DRKG official (TransE dim=400), letteratura drug repurposing. I parametri PathogenKG originali sono mantenuti sotto 'pathogen31-cmp-gene'.",
+        "rgcn": {
+            "conv_layer_num": 2,
+            "layer_0": 64,
+            "layer_1": 64,
+            "mlp_out_layer": 64,
+            "learning_rate": 0.001,
+            "num_bases": 30,
+            "grad_norm": 1.0,
+            "regularization": 1e-05,
+            "weight_decay": 0.01,
+            "scheduler_gamma": 0.995
+        },
+        "rgat": {
+            "conv_layer_num": 2,
+            "layer_0": 64,
+            "layer_1": 64,
+            "mlp_out_layer": 64,
+            "learning_rate": 0.001,
+            "num_bases": 30,
+            "grad_norm": 1.0,
+            "regularization": 1e-05,
+            "weight_decay": 0.01,
+            "scheduler_gamma": 0.995
+        },
+        "compgcn": {
+            "conv_layer_num": 2,
+            "dropout": 0.3,
+            "layer_0": 64,
+            "layer_1": 64,
+            "mlp_out_layer": 64,
+            "learning_rate": 0.001,
+            "opn": "sub",
+            "grad_norm": 1.0,
+            "regularization": 1e-05,
+            "weight_decay": 0.01,
+            "scheduler_gamma": 0.995
+        }
+    },
+    "lp-benchmark-64": {
+        "_comment": "lp-benchmark at 64-dim. Good for quick experiments / low VRAM.",
+        "rgcn": {
+            "conv_layer_num": 2, "layer_0": 64, "layer_1": 64, "mlp_out_layer": 64,
+            "learning_rate": 0.001, "num_bases": 30, "grad_norm": 1.0,
+            "regularization": 1e-5, "weight_decay": 0.01, "scheduler_gamma": 0.995
+        },
+        "rgat": {
+            "conv_layer_num": 2, "layer_0": 64, "layer_1": 64, "mlp_out_layer": 64,
+            "learning_rate": 0.001, "num_bases": 30, "grad_norm": 1.0,
+            "regularization": 1e-5, "weight_decay": 0.01, "scheduler_gamma": 0.995
+        },
+        "compgcn": {
+            "conv_layer_num": 2, "dropout": 0.3, "layer_0": 64, "layer_1": 64,
+            "mlp_out_layer": 64, "learning_rate": 0.001, "opn": "sub",
+            "grad_norm": 1.0, "regularization": 1e-5, "weight_decay": 0.01,
+            "scheduler_gamma": 0.995
+        },
+        "distmult_kge": {
+            "conv_layer_num": 0, "mlp_out_layer": 64, "dropout": 0.0,
+            "learning_rate": 0.001, "grad_norm": 1.0,
+            "regularization": 1e-5, "weight_decay": 0.01, "scheduler_gamma": 0.995
+        },
+        "transe": {
+            "conv_layer_num": 0, "mlp_out_layer": 64, "dropout": 0.0,
+            "learning_rate": 0.001, "grad_norm": 1.0,
+            "regularization": 1e-5, "weight_decay": 0.01, "scheduler_gamma": 0.995,
+            "gamma": 12.0, "p_norm": 1
+        },
+        "rotate": {
+            "conv_layer_num": 0, "mlp_out_layer": 64, "dropout": 0.0,
+            "learning_rate": 0.001, "grad_norm": 1.0,
+            "regularization": 1e-5, "weight_decay": 0.01, "scheduler_gamma": 0.995,
+            "gamma": 12.0
+        },
+        "node2vec": {
+            "conv_layer_num": 0, "mlp_out_layer": 64, "dropout": 0.0,
+            "learning_rate": 0.001, "grad_norm": 1.0,
+            "regularization": 1e-5, "weight_decay": 0.01, "scheduler_gamma": 0.995,
+            "walk_length": 20, "context_size": 10, "walks_per_node": 10,
+            "p": 1.0, "q": 1.0, "pretrain_epochs": 5
+        }
+    },
+    "lp-benchmark-32": {
+        "_comment": "lp-benchmark at 32-dim. Good for quick experiments / low VRAM.",
+        "rgcn": {
+            "conv_layer_num": 2, "layer_0": 32, "layer_1": 32, "mlp_out_layer": 32,
+            "learning_rate": 0.001, "num_bases": 30, "grad_norm": 1.0,
+            "regularization": 1e-5, "weight_decay": 0.01, "scheduler_gamma": 0.995
+        },
+        "rgat": {
+            "conv_layer_num": 2, "layer_0": 32, "layer_1": 32, "mlp_out_layer": 32,
+            "learning_rate": 0.001, "num_bases": 30, "grad_norm": 1.0,
+            "regularization": 1e-5, "weight_decay": 0.01, "scheduler_gamma": 0.995
+        },
+        "compgcn": {
+            "conv_layer_num": 2, "dropout": 0.3, "layer_0": 32, "layer_1": 32,
+            "mlp_out_layer": 64, "learning_rate": 0.001, "opn": "sub",
+            "grad_norm": 1.0, "regularization": 1e-5, "weight_decay": 0.01,
+            "scheduler_gamma": 0.995
+        }
+    },
+    "lp-benchmark": {
+        "_comment": "Hyperparameters for standard KG link prediction benchmarks (FB15k-237, WN18RR). Based on CompGCN (Vashishth 2020): 200-dim, 2 layers, sub/corr composition.",
+        "rgcn": {
+            "conv_layer_num": 2,
+            "layer_0": 200,
+            "layer_1": 200,
+            "mlp_out_layer": 200,
+            "learning_rate": 0.001,
+            "num_bases": 30,
+            "grad_norm": 1.0,
+            "regularization": 1e-5,
+            "weight_decay": 0.01,
+            "scheduler_gamma": 0.995
+        },
+        "rgat": {
+            "conv_layer_num": 2,
+            "layer_0": 200,
+            "layer_1": 200,
+            "mlp_out_layer": 200,
+            "learning_rate": 0.001,
+            "num_bases": 30,
+            "grad_norm": 1.0,
+            "regularization": 1e-5,
+            "weight_decay": 0.01,
+            "scheduler_gamma": 0.995
+        },
+        "compgcn": {
+            "conv_layer_num": 2,
+            "dropout": 0.3,
+            "layer_0": 200,
+            "layer_1": 200,
+            "mlp_out_layer": 200,
+            "learning_rate": 0.001,
+            "opn": "sub",
+            "grad_norm": 1.0,
+            "regularization": 1e-5,
+            "weight_decay": 0.01,
+            "scheduler_gamma": 0.995
+        },
+        "distmult_kge": {
+            "conv_layer_num": 0, "mlp_out_layer": 200, "dropout": 0.0,
+            "learning_rate": 0.001, "grad_norm": 1.0,
+            "regularization": 1e-5, "weight_decay": 0.01, "scheduler_gamma": 0.995
+        },
+        "transe": {
+            "conv_layer_num": 0, "mlp_out_layer": 200, "dropout": 0.0,
+            "learning_rate": 0.001, "grad_norm": 1.0,
+            "regularization": 1e-5, "weight_decay": 0.01, "scheduler_gamma": 0.995,
+            "gamma": 12.0, "p_norm": 1
+        },
+        "rotate": {
+            "conv_layer_num": 0, "mlp_out_layer": 200, "dropout": 0.0,
+            "learning_rate": 0.001, "grad_norm": 1.0,
+            "regularization": 1e-5, "weight_decay": 0.01, "scheduler_gamma": 0.995,
+            "gamma": 12.0
+        },
+        "node2vec": {
+            "conv_layer_num": 0, "mlp_out_layer": 128, "dropout": 0.0,
+            "learning_rate": 0.001, "grad_norm": 1.0,
+            "regularization": 1e-5, "weight_decay": 0.01, "scheduler_gamma": 0.995,
+            "walk_length": 20, "context_size": 10, "walks_per_node": 10,
+            "p": 1.0, "q": 1.0, "pretrain_epochs": 5
+        }
+    },
+    "node-classification": {
+        "_comment": "Hyperparameters for node classification on RDF benchmarks (AIFB, MUTAG, BGS, AM). Based on R-GCN paper (Schlichtkrull 2018): hidden=16, 2 layers, l2=5e-4.",
+        "rgcn": {
+            "conv_layer_num": 2,
+            "layer_0": 16,
+            "layer_1": 16,
+            "mlp_out_layer": 16,
+            "learning_rate": 0.005,
+            "num_bases": 30,
+            "grad_norm": 1.0,
+            "regularization": 0.0,
+            "weight_decay": 0.0005,
+            "scheduler_gamma": 1.0
+        },
+        "rgat": {
+            "conv_layer_num": 2,
+            "layer_0": 16,
+            "layer_1": 16,
+            "mlp_out_layer": 16,
+            "learning_rate": 0.005,
+            "num_bases": 30,
+            "dropout": 0.1,
+            "grad_norm": 1.0,
+            "regularization": 0.0,
+            "weight_decay": 0.0005,
+            "scheduler_gamma": 1.0
+        },
+        "compgcn": {
+            "conv_layer_num": 2,
+            "dropout": 0.0,
+            "layer_0": 16,
+            "layer_1": 16,
+            "mlp_out_layer": 16,
+            "learning_rate": 0.005,
+            "opn": "sub",
+            "grad_norm": 1.0,
+            "regularization": 0.0,
+            "weight_decay": 0.0005,
+            "scheduler_gamma": 1.0
+        },
+        "distmult_kge": {
+            "conv_layer_num": 0, "mlp_out_layer": 16, "dropout": 0.0,
+            "learning_rate": 0.005, "grad_norm": 1.0, "weight_decay": 0.0005
+        },
+        "transe": {
+            "conv_layer_num": 0, "mlp_out_layer": 16, "dropout": 0.0,
+            "learning_rate": 0.005, "grad_norm": 1.0, "weight_decay": 0.0005,
+            "gamma": 12.0, "p_norm": 1
+        },
+        "rotate": {
+            "conv_layer_num": 0, "mlp_out_layer": 16, "dropout": 0.0,
+            "learning_rate": 0.005, "grad_norm": 1.0, "weight_decay": 0.0005,
+            "gamma": 12.0
+        },
+        "node2vec": {
+            "conv_layer_num": 0, "mlp_out_layer": 16, "dropout": 0.0,
+            "learning_rate": 0.005, "grad_norm": 1.0, "weight_decay": 0.0005,
+            "walk_length": 20, "context_size": 10, "walks_per_node": 10,
+            "p": 1.0, "q": 1.0, "pretrain_epochs": 5
+        }
+    },
+    "node-classification-32":{
+        "_comment": "Hyperparameters for node classification on RDF benchmarks (AIFB, MUTAG, BGS, AM). Based on R-GCN paper (Schlichtkrull 2018): hidden=16, 2 layers, l2=5e-4.",
+        "rgcn": {
+            "conv_layer_num": 2,
+            "layer_0": 32,
+            "layer_1": 32,
+            "mlp_out_layer": 32,
+            "learning_rate": 0.005,
+            "num_bases": 30,
+            "grad_norm": 1.0,
+            "regularization": 0.0,
+            "weight_decay": 0.001,
+            "scheduler_gamma": 1.0
+        },
+        "rgat": {
+            "conv_layer_num": 2,
+            "layer_0": 32,
+            "layer_1": 32,
+            "mlp_out_layer": 32,
+            "learning_rate": 0.005,
+            "num_bases": 30,
+            "dropout": 0.3,
+            "grad_norm": 1.0,
+            "regularization": 0.0,
+            "weight_decay": 0.001,
+            "scheduler_gamma": 1.0
+        },
+        "compgcn": {
+            "conv_layer_num": 2,
+            "dropout": 0.3,
+            "layer_0": 32,
+            "layer_1": 32,
+            "mlp_out_layer": 32,
+            "learning_rate": 0.005,
+            "opn": "sub",
+            "grad_norm": 1.0,
+            "regularization": 0.0,
+            "weight_decay": 0.001,
+            "scheduler_gamma": 1.0
+        },
+        "distmult_kge": {
+            "conv_layer_num": 0, "mlp_out_layer": 32, "dropout": 0.0,
+            "learning_rate": 0.005, "grad_norm": 1.0, "weight_decay": 0.001
+        },
+        "transe": {
+            "conv_layer_num": 0, "mlp_out_layer": 32, "dropout": 0.0,
+            "learning_rate": 0.005, "grad_norm": 1.0, "weight_decay": 0.001,
+            "gamma": 12.0, "p_norm": 1
+        },
+        "rotate": {
+            "conv_layer_num": 0, "mlp_out_layer": 32, "dropout": 0.0,
+            "learning_rate": 0.005, "grad_norm": 1.0, "weight_decay": 0.001,
+            "gamma": 12.0
+        },
+        "node2vec": {
+            "conv_layer_num": 0, "mlp_out_layer": 32, "dropout": 0.0,
+            "learning_rate": 0.005, "grad_norm": 1.0, "weight_decay": 0.001,
+            "walk_length": 20, "context_size": 10, "walks_per_node": 10,
+            "p": 1.0, "q": 1.0, "pretrain_epochs": 5
+        }
+    },
+
+    "node-classification-128": {
+        "_comment": "Hyperparameters for node classification on RDF benchmarks (AIFB, MUTAG, BGS, AM). Based on R-GCN paper (Schlichtkrull 2018): hidden=16, 2 layers, l2=5e-4.",
+        "rgcn": {
+            "conv_layer_num": 3,
+            "layer_0": 128,
+            "layer_1": 128,
+            "layer_2": 128,
+            "mlp_out_layer": 128,
+            "learning_rate": 0.001,
+            "num_bases": 50,
+            "dropout": 0.5,
+            "grad_norm": 1.0,
+            "weight_decay": 0.0005,
+            "scheduler_gamma": 0.8
+        },
+
+        "rgat": {
+            "conv_layer_num": 2,
+            "layer_0": 128,
+            "layer_1": 128,
+            "mlp_out_layer": 128,
+            "learning_rate": 0.01,
+            "num_bases": 16,
+            "grad_norm": 1.0,
+            "regularization": 0.0,
+            "weight_decay": 0.0005,
+            "scheduler_gamma": 1.0
+        },
+        "compgcn": {
+            "conv_layer_num": 2,
+            "dropout": 0.0,
+            "layer_0": 128,
+            "layer_1": 128,
+            "mlp_out_layer": 128,
+            "learning_rate": 0.01,
+            "opn": "sub",
+            "grad_norm": 1.0,
+            "regularization": 0.0,
+            "weight_decay": 0.0005,
+            "scheduler_gamma": 1.0
+        },
+        "distmult_kge": {
+            "conv_layer_num": 0, "mlp_out_layer": 128, "dropout": 0.0,
+            "learning_rate": 0.001, "grad_norm": 1.0, "weight_decay": 0.0005
+        },
+        "transe": {
+            "conv_layer_num": 0, "mlp_out_layer": 128, "dropout": 0.0,
+            "learning_rate": 0.001, "grad_norm": 1.0, "weight_decay": 0.0005,
+            "gamma": 12.0, "p_norm": 1
+        },
+        "rotate": {
+            "conv_layer_num": 0, "mlp_out_layer": 128, "dropout": 0.0,
+            "learning_rate": 0.001, "grad_norm": 1.0, "weight_decay": 0.0005,
+            "gamma": 12.0
+        },
+        "node2vec": {
+            "conv_layer_num": 0, "mlp_out_layer": 128, "dropout": 0.0,
+            "learning_rate": 0.001, "grad_norm": 1.0, "weight_decay": 0.0005,
+            "walk_length": 20, "context_size": 10, "walks_per_node": 10,
+            "p": 1.0, "q": 1.0, "pretrain_epochs": 5
+        }
+    },
+
+    "default": {
+        "rgcn": {
+            "conv_layer_num": 3,
+            "layer_0": 16,
+            "layer_1": 64,
+            "layer_2": 64,
+            "mlp_out_layer": 8,
+            "learning_rate": 0.01,
+            "num_bases": 50,
+            "grad_norm": 0.6,
+            "regularization": 0.008,
+            "weight_decay": 0.01,
+            "scheduler_gamma": 0.995
+        },
+        "rgat": {
+            "conv_layer_num": 1,
+            "layer_0": 10,
+            "layer_1": 5,
+            "mlp_out_layer": 40,
+            "learning_rate": 0.01,
+            "num_bases": 16,
+            "grad_norm": 1,
+            "regularization": 0.01,
+            "weight_decay": 0.01,
+            "scheduler_gamma": 0.995
+        },
+        "compgcn": {
+            "conv_layer_num": 3,
+            "dropout": 0.6,
+            "layer_0": 16,
+            "layer_1": 32,
+            "layer_2": 8,
+            "mlp_out_layer": 16,
+            "learning_rate": 0.02,
+            "opn": "corr",
+            "grad_norm": 0.9,
+            "regularization": 9e-05,
+            "weight_decay": 0.01,
+            "scheduler_gamma": 0.995
+        },
+        "distmult_kge": {
+            "conv_layer_num": 0, "mlp_out_layer": 200, "dropout": 0.0,
+            "learning_rate": 0.001, "grad_norm": 1.0,
+            "regularization": 1e-5, "weight_decay": 0.01, "scheduler_gamma": 0.995
+        },
+        "transe": {
+            "conv_layer_num": 0, "mlp_out_layer": 200, "dropout": 0.0,
+            "learning_rate": 0.001, "grad_norm": 1.0,
+            "regularization": 1e-5, "weight_decay": 0.01, "scheduler_gamma": 0.995,
+            "gamma": 12.0, "p_norm": 1
+        },
+        "rotate": {
+            "conv_layer_num": 0, "mlp_out_layer": 200, "dropout": 0.0,
+            "learning_rate": 0.001, "grad_norm": 1.0,
+            "regularization": 1e-5, "weight_decay": 0.01, "scheduler_gamma": 0.995,
+            "gamma": 12.0
+        },
+        "node2vec": {
+            "conv_layer_num": 0, "mlp_out_layer": 128, "dropout": 0.0,
+            "learning_rate": 0.001, "grad_norm": 1.0,
+            "regularization": 1e-5, "weight_decay": 0.01, "scheduler_gamma": 0.995,
+            "walk_length": 20, "context_size": 10, "walks_per_node": 10,
+            "p": 1.0, "q": 1.0, "pretrain_epochs": 5
+        }
+    }
+}
