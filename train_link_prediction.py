@@ -411,12 +411,12 @@ def main(args):
     print(f'[i] Test evaluation: {"type-constrained" if use_type_constrained else "full-graph"} filtered ranking')
 
     # Auto-switch loss for TransE: margin loss is the correct choice (paper Bordes 2013)
-    if args.loss == 'auto':
-        args.loss = 'margin' if args.model == 'transe' else 'focal'
-        print(f'[i] Auto loss → {args.loss}')
-    elif args.model == 'transe' and args.loss in ('focal', 'bce'):
-        print(f'[!] TransE with {args.loss} loss: suboptimal (designed for margin loss). '
-              f'Consider --loss margin.')
+    # if args.loss == 'auto':
+    #     args.loss = 'margin' if args.model == 'transe' else 'focal'
+    #     print(f'[i] Auto loss → {args.loss}')
+    # elif args.model == 'transe' and args.loss in ('focal', 'bce'):
+    #     print(f'[!] TransE with {args.loss} loss: suboptimal (designed for margin loss). '
+    #           f'Consider --loss margin.')
 
     if args.loss == 'bce':
         print(f"[i] Loss: bce (label_smoothing={args.label_smoothing})")

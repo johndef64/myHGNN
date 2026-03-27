@@ -10,14 +10,16 @@ Paper reference values (filtered, full-graph ranking):
 
 Note on loss function:
   - DistMult and RotatE use BCE + label smoothing 0.1 (as in CompGCN paper setup).
-  - TransE uses pairwise margin loss (margin=1.0), matching the original paper
-    (Bordes et al. 2013). This is the correct loss for TransE's translation assumption.
-  - RotatE originally uses self-adversarial negative sampling; here we use filtered
+  - TransE uses BCE without smoothing. The original paper uses margin loss, but BCE
+    works better here because margin loss with full-batch training (rate=1) saturates
+    early: most pairs quickly satisfy the margin condition and gradients → 0, stopping
+    learning. Use --loss margin --neg_batch_size 4096 to experiment with margin loss.
+    - RotatE originally uses self-adversarial negative sampling; here we use filtered
     uniform sampling, which may yield slightly lower results than the original paper.
 
-  - If TransE uses BCE without smoothing: the original paper uses margin loss (not BCE),
-    so TransE results may differ from paper values.
-    
+[TransE dovrebbe usare  pairwise margin loss (margin=1.0), matching the original paper
+ (Bordes et al. 2013). This is the correct loss for TransE's translation assumption.]
+
 Usage:
   python benchmark_kge_lp.py                            # all models, fb15k-237 + wn18rr
   python benchmark_kge_lp.py --runs 3 --epochs 500
@@ -70,7 +72,7 @@ PAPER_RESULTS = {
 # Loss function per model
 _LOSS_FN = {
     'distmult_kge': 'bce',
-    'transe':        'margin',   # paper Bordes 2013: pairwise margin loss
+    'transe':        'bce',   # paper Bordes 2013: pairwise margin loss
     'rotate':        'bce',
 }
 # Label smoothing (bce only; unused for margin)
