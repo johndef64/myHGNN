@@ -132,8 +132,11 @@ def build_model(model_name, dataset_info, config_name, models_params_path):
             encoder_kwargs_init['dropout'] = mp.get('dropout', 0.1)
         encoder = EncoderClass(**encoder_kwargs_init)
 
+    # RotatE entity embeddings are [N, 2*d] (real + imag concatenated)
+    classifier_dim = 2 * out_dim if model_name == 'rotate' else out_dim
+
     decoder = NodeClassifier(
-        hidden_dim=out_dim,
+        hidden_dim=classifier_dim,
         num_classes=dataset_info['num_classes'],
         dropout=mp.get('dropout', 0.3),
         num_layers=1,  # single linear layer, as in R-GCN paper
