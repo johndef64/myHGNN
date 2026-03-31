@@ -51,10 +51,10 @@ Training protocol (CompGCN / Vashishth et al. 2020):
   • Early stopping: full-graph filtered val MRR (maximise), patience in epochs.
 
 Usage:
-  python benchmark_gnn_lp_1vsall.py --models compgcn --benchmarks wn18rr
-  python benchmark_gnn_lp_1vsall.py --models compgcn rgcn --benchmarks wn18rr fb15k-237
-  python benchmark_gnn_lp_1vsall.py --batch_size 512   # reduce if OOM
-  python benchmark_gnn_lp_1vsall.py --config lp-benchmark-64  # 64-dim
+  python benchmark_gnn_lp.py --models compgcn --benchmarks wn18rr
+  python benchmark_gnn_lp.py --models compgcn rgcn --benchmarks wn18rr fb15k-237
+  python benchmark_gnn_lp.py --batch_size 512   # reduce if OOM
+  python benchmark_gnn_lp.py --config lp-benchmark-64  # 64-dim
 
 Memory per mini-batch (B queries × N entities):
   WN18RR  (N=40K, dim=200, B=128): 128×40K×4B  ≈  20 MB/step  — very cheap
@@ -696,7 +696,7 @@ if __name__ == '__main__':
                         help='Config from models_params.json (default: lp-benchmark = 200-dim)')
     parser.add_argument('--runs', type=int, default=1)
     parser.add_argument('--epochs', type=int, default=500)
-    parser.add_argument('--patience', type=int, default=200,
+    parser.add_argument('--patience', type=int, default=50,
                         help='Early stopping patience in epochs on val MRR (default: 200)')
     parser.add_argument('--evaluate_every', type=int, default=5,
                         help='Compute val MRR every N epochs (default: 5). '

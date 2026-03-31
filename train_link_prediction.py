@@ -13,6 +13,11 @@ Training mode is selected automatically based on --loss:
   --loss focal → negative sampling: focal loss + adversarial weighting (imbalanced datasets)
   --loss margin→ negative sampling: pairwise margin loss (TransE)
 
+Ranking evaluation mode (automatic by default, override if needed):
+  default               → type-constrained MRR for custom datasets and ogbl-biokg;
+                          full-graph MRR for fb15k-237 / wn18rr
+  --full_graph_mrr      → force full-graph filtered MRR on any dataset
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   BENCHMARKS  (1-vs-All BCE, full-graph filtered val/test MRR)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -545,13 +550,13 @@ def main(args):
         eval_filtered_val = True
         # ogbl-biokg: type-constrained (too large for full-graph ranking)
         # fb15k-237, wn18rr: full-graph (standard literature protocol)
-        use_type_constrained = (args.benchmark == 'ogbl-biokg')
+        use_type_constrained = (args.benchmark == 'ogbl-biokg') and not args.full_graph_mrr
         print(f'[i] Benchmark mode: using {"type-constrained" if use_type_constrained else "full-graph"} '
               f'filtered val MRR during training (matches test evaluation).')
     else:
         print(f'[i] Dataset: {args.tsv}')
         eval_filtered_val = args.eval_filtered
-        use_type_constrained = True  # KG eterogenei custom: sempre type-constrained
+        use_type_constrained = not args.full_graph_mrr  # default: type-constrained per KG eterogenei
 
     print(f'[i] Test evaluation: {"type-constrained" if use_type_constrained else "full-graph"} filtered ranking')
 
@@ -975,6 +980,9 @@ if __name__ == '__main__':
     # ──────────────────────────────────────────────────────────────────────────
 
     parser.add_argument('--eval_filtered', action='store_true', default=True)
+    parser.add_argument('--full_graph_mrr', action='store_true', default=False,
+                        help='Force full-graph filtered MRR instead of type-constrained. '
+                             'Useful to test custom datasets with full-graph ranking.')
     parser.add_argument('--dry_run', action='store_true')
 
     args = parser.parse_args()
