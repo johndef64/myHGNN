@@ -7,63 +7,63 @@ Uses modular encoder/decoder architecture:
 
 Su Bio-KG la evaluation deve essere type-constrained (filtraggio solo contro entità del tipo corretto), altrimenti MRR e Hits@K saranno molto bassi a causa dell'enorme numero di entità negative. Su benchmark standard (FB15k-237, WN18RR) è invece più comune fare filtraggio completo (contro tutte le entità), ma è possibile scegliere anche il filtraggio type-constrained.
 
-Usage:
-  --> On custom datasets:
-  # [PathogeKG]
-  python train_link_prediction.py --model compgcn --epochs 400 --task TARGET
-  python train_link_prediction.py --model compgcn --runs 12 --epochs 400 --early_stopping
+Training mode is selected automatically based on --loss:
+  --loss bce   → 1-vs-All (CompGCN paper protocol): scores ALL entities per query,
+                 multi-hot labels, entity bias, no weight decay, filtered val MRR
+  --loss focal → negative sampling: focal loss + adversarial weighting (imbalanced datasets)
+  --loss margin→ negative sampling: pairwise margin loss (TransE)
 
-  # [DRKG]
-  python train_link_prediction.py --model rgcn --tsv dataset/drkg/drkg_reduced.tsv --task Compound-Gene
-  
-  # [Hetionet]
-  python train_link_prediction.py --model rgcn --tsv dataset/hetionet/edges.tsv --task CcSE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  BENCHMARKS  (1-vs-All BCE, full-graph filtered val/test MRR)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+  # FB15k-237
+  python train_link_prediction.py --benchmark fb15k-237 --model compgcn --config_name lp-benchmark --loss bce --label_smoothing 0.1 --early_stopping -e 500
+  python train_link_prediction.py --benchmark fb15k-237 --model rgcn    --config_name lp-benchmark --loss bce --label_smoothing 0.1 --early_stopping -e 500
 
+  # WN18RR
+  python train_link_prediction.py --benchmark wn18rr --model compgcn --config_name lp-benchmark --loss bce --label_smoothing 0.1 --early_stopping -e 500
+  python train_link_prediction.py --benchmark wn18rr --model rgcn    --config_name lp-benchmark --loss bce --label_smoothing 0.1 --early_stopping -e 500
 
-  --> On Benchmarks:
+  # ogbl-biokg  (type-constrained val/test MRR, large graph → bigger batch)
+  python train_link_prediction.py --benchmark ogbl-biokg --model compgcn --config_name lp-benchmark --loss bce --label_smoothing 0.1 --neg_batch_size 512 --early_stopping -e 500
+  python train_link_prediction.py --benchmark ogbl-biokg --model rgcn    --config_name lp-benchmark --loss bce --label_smoothing 0.1 --neg_batch_size 512 --early_stopping -e 500
 
-  # BCE (come il paper CompGCN — raccomandato per i benchmark)
-  python train_link_prediction.py --benchmark fb15k-237 --model compgcn --config_name lp-benchmark --loss bce
-  python train_link_prediction.py --benchmark fb15k-237 --model compgcn --config_name lp-benchmark --loss bce --label_smoothing 0.1
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  CUSTOM DATASETS  (negative sampling, type-constrained val/test MRR)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  # Focal loss (utile per dataset sbilanciati come PathogenKG)
-  python train_link_prediction.py --model compgcn --task TARGET --loss focal --alpha 0.25 --gamma 3.0 --alpha_adv 2.0
+  # PathogenKG — focal loss (sbilanciato), task TARGET
+  python train_link_prediction.py --model compgcn --task TARGET --loss focal --early_stopping -e 400
+  python train_link_prediction.py --model rgcn    --task TARGET --loss focal --early_stopping -e 400
+  python train_link_prediction.py --model compgcn --task TARGET --loss focal --runs 5 --early_stopping -e 400
 
-  
-  python train_link_prediction.py --benchmark fb15k-237 --model compgcn --config_name lp-benchmark-64 --loss bce
-  python train_link_prediction.py --benchmark wn18rr --model rgcn --epochs 200 --loss bce
-  python train_link_prediction.py --benchmark wn18rr --model rgcn --config_name lp-benchmark-32 --epochs 200 --loss bce --negative_rate 50 --epochs 500 --patience 200
+  # PathogenKG — BCE + 1-vs-All (se vuoi replicare il protocollo benchmark)
+  python train_link_prediction.py --model compgcn --task TARGET --loss bce --label_smoothing 0.1 --early_stopping -e 400
 
-  --> on Bio-KG, con filtraggio type-constrained (raccomandato)
-  python train_link_prediction.py --benchmark ogbl-biokg --model compgcn --loss bce --eval_filtered --config_name lp-benchmark-64
+  # DRKG
+  python train_link_prediction.py --model rgcn --tsv dataset/drkg/drkg_reduced.tsv --task Compound-Gene --loss focal --early_stopping -e 400
 
-  python train_link_prediction.py --benchmark ogbl-biokg --model compgcn  --config_name lp-benchmark-64 --neg_batch_size 4096 --loss bce --eval_filtered
+  # Hetionet
+  python train_link_prediction.py --model rgcn --tsv dataset/hetionet/edges.tsv --task CcSE --loss focal --early_stopping -e 400
 
-# diverse loss
-Per replicare il paper CompGCN su FB15k-237:
-python train_link_prediction.py --benchmark fb15k-237 --model compgcn   --config_name lp-benchmark-32 --loss bce --label_smoothing 0.1   --negative_rate 4 --early_stopping -e 500
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  KGE BASELINES  (pure embedding models, no GNN encoder)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Per il tuo dataset sbilanciato con la focal:
-python train_link_prediction.py --task TARGET --loss focal \
-  --alpha 0.25 --gamma 3.0 --alpha_adv 2.0
+  # DistMult
+  python train_link_prediction.py --benchmark fb15k-237  --model distmult_kge --config_name lp-benchmark --loss bce
+  python train_link_prediction.py --benchmark ogbl-biokg --model distmult_kge --config_name lp-benchmark --loss bce
 
-  
-  ===============
+  # TransE  (margin loss — paper protocol)
+  python train_link_prediction.py --benchmark fb15k-237 --model transe --config_name lp-benchmark --loss margin
 
-# DistMult puro (benchmark: ogbl-biokg consigliato)
-python train_link_prediction.py --benchmark ogbl-biokg --model distmult_kge --config_name lp-benchmark --loss bce
+  # RotatE
+  python train_link_prediction.py --benchmark wn18rr    --model rotate --config_name lp-benchmark --loss bce
+  python train_link_prediction.py --benchmark fb15k-237 --model rotate --config_name lp-benchmark --loss bce
 
-# TransE
-python train_link_prediction.py --benchmark fb15k-237 --model transe --config_name lp-benchmark --loss bce
-
-# RotatE
-python train_link_prediction.py --benchmark wn18rr --model rotate --config_name lp-benchmark --loss bce
-
-# Node2Vec + DistMult decoder
-python train_link_prediction.py --model node2vec --task TARGET --loss bce
-
-
+  # Node2Vec + DistMult
+  python train_link_prediction.py --model node2vec --task TARGET --loss bce
 
 """
 
@@ -72,6 +72,7 @@ import json
 import time
 import argparse
 import warnings
+from collections import defaultdict
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -396,6 +397,137 @@ class _ScoringWrapper:
         return self.decoder(self.node_emb, self.rel_emb, triplets)
 
 
+# ─── 1-vs-All training helpers (CompGCN paper protocol) ──────────────────────
+
+def build_multilabel_data(train_triplets, num_original_rels):
+    """
+    Group unique (sub, rel) pairs with multi-hot labels.
+    Mirrors CompGCN sr2o: forward queries (h,r)→t + inverse queries (t,r+R)→h.
+    """
+    sr2o = defaultdict(list)
+    for triple in train_triplets.tolist():
+        h, r, t = triple[0], triple[1], triple[2]
+        sr2o[(h, r)].append(t)
+        sr2o[(t, r + num_original_rels)].append(h)
+    queries, labels = [], []
+    for (sub, rel), objs in sr2o.items():
+        queries.append([sub, rel])
+        labels.append(objs)
+    return torch.tensor(queries, dtype=torch.long), labels
+
+
+def train_epoch_1vsall(encoder, decoder, optimizer, grad_norm,
+                       x_dict, edge_index, queries, labels, num_entities,
+                       label_smoothing, batch_size, encoder_kwargs,
+                       entity_bias=None):
+    """
+    One epoch of 1-vs-All training: encoder re-runs per mini-batch.
+
+    For each (sub, rel) query, scores ALL N entities as tail candidates.
+    Multi-hot BCE with label smoothing (CompGCN paper).
+    No explicit L2 reg (original CompGCN uses l2=0.0).
+    """
+    encoder.train()
+    dev = next(encoder.parameters()).device
+    N   = num_entities
+
+    n    = len(queries)
+    perm = torch.randperm(n)
+    queries_s = queries[perm].to(dev)
+    labels_s  = [labels[i] for i in perm.tolist()]
+
+    n_batches       = max(1, (n + batch_size - 1) // batch_size)
+    total_task_loss = 0.0
+
+    for i in range(n_batches):
+        start   = i * batch_size
+        end     = min(start + batch_size, n)
+        batch_q = queries_s[start:end]      # (B, 2)
+        batch_l = labels_s[start:end]       # list of B obj-lists
+        B       = batch_q.size(0)
+
+        optimizer.zero_grad()
+        node_emb, rel_emb = encoder(x_dict, edge_index, **encoder_kwargs)
+
+        sub_e  = node_emb[batch_q[:, 0]]    # (B, dim)
+        r_e    = rel_emb[batch_q[:, 1]]     # (B, dim)
+        scores = torch.mm(sub_e * r_e, node_emb.t())   # (B, N)
+
+        if entity_bias is not None:
+            scores = scores + entity_bias.unsqueeze(0)  # (B, N)
+
+        # Multi-hot label with label smoothing: target = (1-ε)·y + ε/N
+        rows = torch.cat([
+            torch.full((len(pos),), b, dtype=torch.long, device=dev)
+            for b, pos in enumerate(batch_l)
+        ])
+        cols = torch.cat([
+            torch.tensor(pos, dtype=torch.long, device=dev)
+            for pos in batch_l
+        ])
+        target = torch.full((B, N), label_smoothing / N, device=dev)
+        target[rows, cols] = 1.0 - label_smoothing + label_smoothing / N
+
+        task_loss = F.binary_cross_entropy_with_logits(scores, target)
+        task_loss.backward()
+
+        params_to_clip = list(encoder.parameters()) + list(decoder.parameters())
+        if entity_bias is not None:
+            params_to_clip.append(entity_bias)
+        torch.nn.utils.clip_grad_norm_(params_to_clip, grad_norm)
+        optimizer.step()
+
+        total_task_loss += task_loss.item()
+
+    return total_task_loss / n_batches
+
+
+@torch.no_grad()
+def _val_mrr_1vsall(encoder, decoder, x_dict, edge_index, encoder_kwargs,
+                    val_triplets, all_filter_triplets, num_entities,
+                    use_type_constrained, entity_bias=None):
+    """
+    Full filtered val MRR for 1-vs-All early stopping.
+    Uses full-graph filtering for standard benchmarks (fb15k-237, wn18rr)
+    and type-constrained filtering for biokg / custom datasets.
+    """
+    encoder.eval()
+    node_emb, rel_emb = encoder(x_dict, edge_index, **encoder_kwargs)
+    dev = node_emb.device
+
+    _bias = entity_bias
+
+    class _SW:
+        def eval(self): pass
+        def distmult(self, _emb, trips):
+            base = decoder(node_emb, rel_emb, trips)
+            if _bias is None:
+                return base
+            # tail prediction: col 0 constant → add bias on col 2 (tail)
+            if trips[:, 0].min() == trips[:, 0].max():
+                return base + _bias[trips[:, 2]]
+            else:  # head prediction
+                return base + _bias[trips[:, 0]]
+
+    if not isinstance(val_triplets, torch.Tensor):
+        val_triplets = torch.tensor(val_triplets, dtype=torch.long)
+
+    val_t     = val_triplets.to(dev)
+    all_nodes = torch.arange(num_entities, device=dev)
+
+    if use_type_constrained:
+        results = evaluation_metrics_filtered_typeconstrained(
+            _SW(), node_emb, all_filter_triplets, val_t,
+            all_nodes, dev, hits_k=[1, 3, 10]
+        )
+    else:
+        results = evaluation_metrics_filtered_fullgraph(
+            _SW(), node_emb, all_filter_triplets, val_t,
+            all_nodes, dev, hits_k=[1, 3, 10]
+        )
+    return results   # dict: mrr, hits@1, hits@3, hits@10
+
+
 # ─── Main ────────────────────────────────────────────────────────────────────
 
 def main(args):
@@ -406,11 +538,16 @@ def main(args):
         print(f'[i] Benchmark: {args.benchmark}')
         if args.config_name == 'pathogen31-64':
             args.config_name = 'lp-benchmark'
-        eval_filtered_val = False
-        print('[i] Benchmark mode: using sampled MRR during training, filtered MRR at test time.')
-        # ogbl-biokg: type-constrained (troppo grande per full-graph ranking)
-        # fb15k-237, wn18rr: full-graph (standard per questi benchmark)
+        # CRITICAL: val MRR must match the final evaluation type so the model
+        # learns the correct ranking objective. Sampled-200 MRR during training
+        # while evaluating with full-graph filtered MRR at test time creates a
+        # mismatch: the model is never optimised for the actual metric.
+        eval_filtered_val = True
+        # ogbl-biokg: type-constrained (too large for full-graph ranking)
+        # fb15k-237, wn18rr: full-graph (standard literature protocol)
         use_type_constrained = (args.benchmark == 'ogbl-biokg')
+        print(f'[i] Benchmark mode: using {"type-constrained" if use_type_constrained else "full-graph"} '
+              f'filtered val MRR during training (matches test evaluation).')
     else:
         print(f'[i] Dataset: {args.tsv}')
         eval_filtered_val = args.eval_filtered
@@ -494,16 +631,51 @@ def main(args):
                 torch.tensor([rel_ids.size(0)], device=device)
             ])
 
-        # Optimizer
-        all_params = list(encoder.parameters()) + list(decoder.parameters())
-        optimizer = torch.optim.AdamW(all_params, lr=mp['learning_rate'],
-                                      weight_decay=mp['weight_decay'])
+        # ── 1-vs-All mode: BCE loss scores ALL entities per (sub, rel) query ──
+        # This is the CompGCN paper protocol. Requires:
+        #   - Multi-hot labels (all valid tails for a query marked as positive)
+        #   - Per-entity bias (prevents BCE collapse toward all-negative attractor)
+        #   - No explicit L2 reg (original CompGCN l2=0.0)
+        #   - LayerNorm disabled in CompGCN encoder
+        # We use 1-vs-All when training with BCE loss (benchmarks and any custom
+        # dataset using --loss bce). Focal/margin keep the negative-sampling path.
+        use_1vsall = (args.loss == 'bce')
+
+        if use_1vsall:
+            # FIX 5: Disable LayerNorm in CompGCN (original has none)
+            if hasattr(encoder, 'use_layer_norm') and encoder.use_layer_norm:
+                encoder.use_layer_norm = False
+                print(f'  [i] LayerNorm disabled in {args.model} encoder '
+                      f'(1-vs-All BCE mode, matches original CompGCN)')
+
+            # FIX 4: Per-entity bias — prevents score collapse in 1-vs-All BCE
+            entity_bias = torch.nn.Parameter(torch.zeros(ds['num_entities'], device=device))
+
+            # FIX 3: Build multi-label grouped training data
+            num_original_rels = (ds['num_relations'] - 1) // 2
+            train_queries, train_labels = build_multilabel_data(
+                train_triplets, num_original_rels
+            )
+            print(f'  [i] Multi-label queries: {len(train_queries)} unique (sub,rel) pairs '
+                  f'({len(train_triplets)} raw train triples, {num_original_rels} original relations)')
+
+            # FIX 6: No weight decay — original CompGCN uses Adam, l2=0.0
+            all_params = (list(encoder.parameters()) + list(decoder.parameters())
+                          + [entity_bias])
+            optimizer = torch.optim.Adam(all_params, lr=mp['learning_rate'])
+        else:
+            entity_bias = None
+            all_params = list(encoder.parameters()) + list(decoder.parameters())
+            optimizer = torch.optim.AdamW(all_params, lr=mp['learning_rate'],
+                                          weight_decay=mp['weight_decay'])
+
         scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=mp['scheduler_gamma'])
 
         # Training loop
         best_val_loss = float('inf')
         best_val_mrr  = -1.0
         last_improvement = 0
+        best_state = None
         save_path = None
 
         if not args.dry_run:
@@ -520,17 +692,42 @@ def main(args):
             with open(os.path.join(folder, 'params.json'), 'w') as f:
                 json.dump(vars(args), f, indent=4)
 
-        val_metrics = {'Auroc': 0, 'Auprc': 0, 'Loss': 0, 'MRR': 0, 'Hits@': 0}
+        val_mrr  = 0.0
+        val_h1   = 0.0
+        val_h3   = 0.0
+        val_h10  = 0.0
+        val_loss = 0.0
 
         rng_batch = np.random.RandomState(seed)
         n_train = len(train_triplets)
         use_minibatch = args.neg_batch_size > 0 and n_train > args.neg_batch_size
         steps_per_epoch = (n_train + args.neg_batch_size - 1) // args.neg_batch_size if use_minibatch else 1
 
-        with trange(1, args.epochs + 1, desc=f'Run {run_i}') as pbar:
+        # ── Table header (printed once before the tqdm bar) ───────────────────
+        eval_label = 'type-constr' if use_type_constrained else 'full-graph'
+        print(f'\n  {"Ep":>5}  {"LR":>8}  {"TrainLoss":>9}  '
+              f'{"valMRR":>7}  {"H@1":>6}  {"H@3":>6}  {"H@10":>6}  '
+              f'{"BestMRR":>7}  {"no-imp":>6}  [{eval_label}]')
+        print(f'  {"-"*5}  {"-"*8}  {"-"*9}  '
+              f'{"-"*7}  {"-"*6}  {"-"*6}  {"-"*6}  '
+              f'{"-"*7}  {"-"*6}')
+
+        with trange(1, args.epochs + 1, desc=f'  run {run_i+1}/{args.runs}',
+                    leave=True) as pbar:
             for epoch in pbar:
-                if use_minibatch:
-                    # Iterate over ALL mini-batches within the epoch (proper mini-batch training)
+
+                if use_1vsall:
+                    # FIX 2: encoder re-runs per mini-batch (no retain_graph)
+                    batch_size_1vsall = args.neg_batch_size if args.neg_batch_size > 0 else 128
+                    train_loss = train_epoch_1vsall(
+                        encoder, decoder, optimizer, mp['grad_norm'],
+                        features, train_index, train_queries, train_labels,
+                        ds['num_entities'], args.label_smoothing,
+                        batch_size_1vsall, encoder_kwargs,
+                        entity_bias=entity_bias,
+                    )
+                    train_m = {'Loss': train_loss}
+                elif use_minibatch:
                     perm = rng_batch.permutation(n_train)
                     train_m = None
                     for step in range(steps_per_epoch):
@@ -553,7 +750,6 @@ def main(args):
                             **loss_kwargs, **encoder_kwargs
                         )
                 else:
-                    # Full-batch: one gradient step over all training triples
                     if args.negative_sampling == 'filtered':
                         neg_trips, neg_labels = neg_sampler(
                             train_triplets, all_entities_arr, args.negative_rate,
@@ -570,81 +766,142 @@ def main(args):
                     )
 
                 scheduler.step()  # once per epoch
+                current_lr = optimizer.param_groups[0]['lr']
 
                 # Validate
                 if epoch % args.evaluate_every == 0:
-                    if args.negative_sampling == 'filtered':
-                        val_neg, val_lab = neg_sampler(
-                            val_triplets, all_entities_arr, args.negative_rate,
-                            all_true_arr, seed=seed + 1000
+                    if use_1vsall:
+                        val_res = _val_mrr_1vsall(
+                            encoder, decoder, features, train_index, encoder_kwargs,
+                            val_triplets, train_val_test_triplets,
+                            ds['num_entities'], use_type_constrained,
+                            entity_bias=entity_bias,
                         )
+                        val_mrr  = val_res['mrr']
+                        val_h1   = val_res['hits@1']
+                        val_h3   = val_res['hits@3']
+                        val_h10  = val_res['hits@10']
+                        val_loss = 0.0
                     else:
-                        val_neg, val_lab = neg_sampler(val_triplets, args.negative_rate)
-                    val_neg, val_lab = val_neg.to(device), val_lab.to(device)
+                        if args.negative_sampling == 'filtered':
+                            val_neg, val_lab = neg_sampler(
+                                val_triplets, all_entities_arr, args.negative_rate,
+                                all_true_arr, seed=seed + 1000
+                            )
+                        else:
+                            val_neg, val_lab = neg_sampler(val_triplets, args.negative_rate)
+                        val_neg, val_lab = val_neg.to(device), val_lab.to(device)
 
-                    val_metrics = eval_step(
-                        encoder, decoder, mp['regularization'],
-                        features, train_index, val_neg, val_lab, train_val_triplets,
-                        **loss_kwargs,
-                        eval_filtered=eval_filtered_val,
-                        all_target_triplets=train_val_test_triplets if eval_filtered_val else None,
-                        num_entities=ds['num_entities'] if eval_filtered_val else None,
-                        use_type_constrained=use_type_constrained,
-                        **encoder_kwargs
-                    )
+                        val_metrics = eval_step(
+                            encoder, decoder, mp['regularization'],
+                            features, train_index, val_neg, val_lab, train_val_triplets,
+                            **loss_kwargs,
+                            eval_filtered=eval_filtered_val,
+                            all_target_triplets=train_val_test_triplets if eval_filtered_val else None,
+                            num_entities=ds['num_entities'] if eval_filtered_val else None,
+                            use_type_constrained=use_type_constrained,
+                            **encoder_kwargs
+                        )
+                        val_mrr  = val_metrics.get('MRR', 0)
+                        val_h1   = val_metrics.get('Hits@', {}).get(1, 0)
+                        val_h3   = val_metrics.get('Hits@', {}).get(3, 0)
+                        val_h10  = val_metrics.get('Hits@', {}).get(10, 0)
+                        val_loss = val_metrics['Loss']
 
-                    # Benchmarks: monitor val MRR (proxy for ranking quality).
-                    # Custom datasets: monitor val loss (stable proxy for focal/bce).
-                    val_improved = (
-                        val_metrics.get('MRR', 0) > best_val_mrr
-                        if is_benchmark
-                        else val_metrics['Loss'] < best_val_loss - args.min_delta
-                    )
+                    # Early stopping: on val MRR when filtered eval, on val loss otherwise
+                    if eval_filtered_val:
+                        val_improved = val_mrr > best_val_mrr
+                    else:
+                        val_improved = val_loss < best_val_loss - args.min_delta
+
+                    no_imp  = 0 if val_improved else epoch - last_improvement
+                    marker  = ' ★' if val_improved else '  '
+
                     if val_improved:
-                        best_val_loss = val_metrics['Loss']
-                        best_val_mrr  = val_metrics.get('MRR', 0)
+                        best_val_loss = val_loss
+                        best_val_mrr  = val_mrr
                         last_improvement = epoch
+                        best_state = {
+                            'encoder': {k: v.cpu().clone()
+                                        for k, v in encoder.state_dict().items()},
+                            'decoder': {k: v.cpu().clone()
+                                        for k, v in decoder.state_dict().items()},
+                        }
+                        if entity_bias is not None:
+                            best_state['entity_bias'] = entity_bias.data.cpu().clone()
                         if save_path:
-                            torch.save({
-                                'encoder': encoder.state_dict(),
-                                'decoder': decoder.state_dict(),
-                            }, save_path)
-                            print("[i] Best model saved.")
-                    elif args.early_stopping and (epoch - last_improvement) >= args.patience:
-                        print(f"[i] Early stopping at epoch {epoch}")
+                            torch.save(best_state, save_path)
+
+                    # One line per evaluation, printed below the tqdm bar
+                    print(f'\r  {epoch:>5}  {current_lr:.2e}  {train_m["Loss"]:>9.4f}  '
+                          f'{val_mrr:>7.4f}  {val_h1:>6.4f}  {val_h3:>6.4f}  {val_h10:>6.4f}  '
+                          f'{best_val_mrr:>7.4f}  {no_imp:>6}{marker}')
+
+                    pbar.set_postfix(
+                        loss=f'{train_m["Loss"]:.4f}',
+                        MRR=f'{val_mrr:.4f}',
+                        best=f'{best_val_mrr:.4f}',
+                        H10=f'{val_h10:.4f}',
+                    )
+
+                    if not val_improved and args.early_stopping and no_imp >= args.patience:
+                        print(f'\n  [i] Early stopping at epoch {epoch} '
+                              f'(no improvement for {args.patience} epochs, '
+                              f'best epoch={last_improvement})')
                         break
+                else:
+                    pbar.set_postfix(loss=f'{train_m["Loss"]:.4f}', lr=f'{current_lr:.2e}')
 
-                pbar.set_postfix(
-                    loss=train_m['Loss'],
-                    val_auroc=val_metrics.get('Auroc', 0),
-                    val_mrr=val_metrics.get('MRR', 0),
-                )
-
-        # Test finale  Final Evaluation
-        if save_path and os.path.exists(save_path):
+        # ── Reload best checkpoint ─────────────────────────────────────────────
+        if best_state is not None:
+            encoder.load_state_dict(
+                {k: v.to(device) for k, v in best_state['encoder'].items()})
+            decoder.load_state_dict(
+                {k: v.to(device) for k, v in best_state['decoder'].items()})
+            if entity_bias is not None and 'entity_bias' in best_state:
+                entity_bias.data.copy_(best_state['entity_bias'].to(device))
+        elif save_path and os.path.exists(save_path):
             ckpt = torch.load(save_path)
             encoder.load_state_dict(ckpt['encoder'])
             decoder.load_state_dict(ckpt['decoder'])
+            if entity_bias is not None and 'entity_bias' in ckpt:
+                entity_bias.data.copy_(ckpt['entity_bias'].to(device))
 
-        if args.negative_sampling == 'filtered':
-            test_neg, test_lab = neg_sampler(
-                test_triplets, all_entities_arr, args.negative_rate,
-                all_true_arr, seed=seed + 2000
+        if use_1vsall:
+            # Test: same scoring as val — filtered full-graph or type-constrained
+            test_res = _val_mrr_1vsall(
+                encoder, decoder, features, train_index, encoder_kwargs,
+                test_triplets, train_val_test_triplets,
+                ds['num_entities'], use_type_constrained,
+                entity_bias=entity_bias,
             )
+            test_m = {
+                'Auroc': 0.0, 'Auprc': 0.0,
+                'MRR':    test_res['mrr'],
+                'Hits@': {1: test_res['hits@1'], 3: test_res['hits@3'],
+                          10: test_res['hits@10']},
+            }
         else:
-            test_neg, test_lab = neg_sampler(test_triplets, args.negative_rate)
-        test_neg, test_lab = test_neg.to(device), test_lab.to(device)
+            if args.negative_sampling == 'filtered':
+                test_neg, test_lab = neg_sampler(
+                    test_triplets, all_entities_arr, args.negative_rate,
+                    all_true_arr, seed=seed + 2000
+                )
+            else:
+                test_neg, test_lab = neg_sampler(test_triplets, args.negative_rate)
+            test_neg, test_lab = test_neg.to(device), test_lab.to(device)
 
-        test_m = eval_step(
-            encoder, decoder, mp['regularization'],
-            features, train_index, test_neg, test_lab, train_val_test_triplets,
-            **loss_kwargs,
-            eval_filtered=args.eval_filtered,
-            all_target_triplets=train_val_test_triplets if args.eval_filtered else None,
-            num_entities=ds['num_entities'] if args.eval_filtered else None,
-            use_type_constrained=use_type_constrained,
-            **encoder_kwargs
-        )
+            test_m = eval_step(
+                encoder, decoder, mp['regularization'],
+                features, train_index, test_neg, test_lab, train_val_test_triplets,
+                **loss_kwargs,
+                eval_filtered=args.eval_filtered,
+                all_target_triplets=train_val_test_triplets if args.eval_filtered else None,
+                num_entities=ds['num_entities'] if args.eval_filtered else None,
+                use_type_constrained=use_type_constrained,
+                **encoder_kwargs
+            )
+
         print(f"Run {run_i} | AUROC: {test_m['Auroc']:.3f}, AUPRC: {test_m['Auprc']:.3f}, "
               f"MRR: {test_m['MRR']:.3f}, Hits@: {test_m['Hits@']}")
 
@@ -654,12 +911,6 @@ def main(args):
             'Hits@1': test_m['Hits@'][1], 'Hits@3': test_m['Hits@'][3],
             'Hits@10': test_m['Hits@'][10],
         })
-
-        """
-        FB15k-237 / WN18RR sono omogenei (un solo tipo di entità), il ranking full-graph contro tutte le entità è lo standard della letteratura ed è anche computazionalmente fattibile (poche migliaia di entità)
-        
-        ogbl-biokg ha ~93K entità di 5 tipi diversi: ranking full-graph sarebbe sia scorretto semanticamente (non ha senso classificare un farmaco come candidato head/tail di una relation gene→gene) sia computazionalmente proibitivo
-        """
 
 
 
