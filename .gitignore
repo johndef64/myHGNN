@@ -14,6 +14,10 @@ figures/*
 generalization_docs/*
 *.zip
 *.tar.gz
+*_v0.py
+*_v1.py
+*_v2.py
+benchmark-code/*
 
 dataset/uniprot_sprot_fungi.dat.gz
 dataset/uniprot_sprot_human.dat.gz

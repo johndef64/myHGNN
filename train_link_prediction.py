@@ -9,9 +9,17 @@ Su Bio-KG la evaluation deve essere type-constrained (filtraggio solo contro ent
 
 Usage:
   --> On custom datasets:
+  # [PathogeKG]
   python train_link_prediction.py --model compgcn --epochs 400 --task TARGET
-  python train_link_prediction.py --model rgcn --tsv dataset/drkg/drkg_reduced.tsv --task Compound-Gene
   python train_link_prediction.py --model compgcn --runs 12 --epochs 400 --early_stopping
+
+  # [DRKG]
+  python train_link_prediction.py --model rgcn --tsv dataset/drkg/drkg_reduced.tsv --task Compound-Gene
+  
+  # [Hetionet]
+  python train_link_prediction.py --model rgcn --tsv dataset/hetionet/edges.tsv --task CcSE
+
+
 
   --> On Benchmarks:
 
@@ -25,12 +33,12 @@ Usage:
   
   python train_link_prediction.py --benchmark fb15k-237 --model compgcn --config_name lp-benchmark-64 --loss bce
   python train_link_prediction.py --benchmark wn18rr --model rgcn --epochs 200 --loss bce
+  python train_link_prediction.py --benchmark wn18rr --model rgcn --config_name lp-benchmark-32 --epochs 200 --loss bce --negative_rate 50 --epochs 500 --patience 200
 
   --> on Bio-KG, con filtraggio type-constrained (raccomandato)
   python train_link_prediction.py --benchmark ogbl-biokg --model compgcn --loss bce --eval_filtered --config_name lp-benchmark-64
 
-  python train_link_prediction.py --benchmark ogbl-biokg --model compgcn \
-  --config_name lp-benchmark-64 --neg_batch_size 4096 --loss bce --eval_filtered
+  python train_link_prediction.py --benchmark ogbl-biokg --model compgcn  --config_name lp-benchmark-64 --neg_batch_size 4096 --loss bce --eval_filtered
 
 # diverse loss
 Per replicare il paper CompGCN su FB15k-237:
@@ -286,7 +294,7 @@ def build_model(model_name, dataset_info, config_name, models_params_path):
 
 def train_step(encoder, decoder, optimizer, grad_norm, reg_param,
                x_dict, edge_index, triplets, labels,
-               loss_fn, alpha, gamma, alpha_adv, label_smoothing,
+               loss_fn, alpha, gamma, alpha_adv, label_smoothing, margin=1.0,
                **encoder_kwargs):
     encoder.train()
     optimizer.zero_grad()
@@ -296,7 +304,7 @@ def train_step(encoder, decoder, optimizer, grad_norm, reg_param,
         decoder, node_emb, rel_emb, triplets, labels, reg_param,
         loss_fn=loss_fn,
         alpha=alpha, gamma=gamma, alpha_adv=alpha_adv,
-        label_smoothing=label_smoothing,
+        label_smoothing=label_smoothing, margin=margin,
     )
 
     loss.backward()
@@ -317,7 +325,7 @@ def train_step(encoder, decoder, optimizer, grad_norm, reg_param,
 @torch.no_grad()
 def eval_step(encoder, decoder, reg_param, x_dict, edge_index,
               triplets, labels, train_val_triplets,
-              loss_fn, alpha, gamma, alpha_adv, label_smoothing,
+              loss_fn, alpha, gamma, alpha_adv, label_smoothing, margin=1.0,
               eval_filtered=False, all_target_triplets=None,
               num_entities=None, use_type_constrained=True,
               **encoder_kwargs):
@@ -331,7 +339,7 @@ def eval_step(encoder, decoder, reg_param, x_dict, edge_index,
         decoder, node_emb, rel_emb, triplets, labels, reg_param,
         loss_fn=loss_fn,
         alpha=alpha, gamma=gamma, alpha_adv=alpha_adv,
-        label_smoothing=label_smoothing,
+        label_smoothing=label_smoothing, margin=margin,
     )
 
     metrics = {
@@ -411,12 +419,12 @@ def main(args):
     print(f'[i] Test evaluation: {"type-constrained" if use_type_constrained else "full-graph"} filtered ranking')
 
     # Auto-switch loss for TransE: margin loss is the correct choice (paper Bordes 2013)
-    # if args.loss == 'auto':
-    #     args.loss = 'margin' if args.model == 'transe' else 'focal'
-    #     print(f'[i] Auto loss → {args.loss}')
-    # elif args.model == 'transe' and args.loss in ('focal', 'bce'):
-    #     print(f'[!] TransE with {args.loss} loss: suboptimal (designed for margin loss). '
-    #           f'Consider --loss margin.')
+    if args.loss == 'auto':
+        args.loss = 'margin' if args.model == 'transe' else 'focal'
+        print(f'[i] Auto loss → {args.loss}')
+    elif args.model == 'transe' and args.loss in ('focal', 'bce'):
+        print(f'[!] TransE with {args.loss} loss: suboptimal (designed for margin loss). '
+              f'Consider --loss margin.')
 
     if args.loss == 'bce':
         print(f"[i] Loss: bce (label_smoothing={args.label_smoothing})")
@@ -494,6 +502,7 @@ def main(args):
 
         # Training loop
         best_val_loss = float('inf')
+        best_val_mrr  = -1.0
         last_improvement = 0
         save_path = None
 
@@ -514,34 +523,53 @@ def main(args):
         val_metrics = {'Auroc': 0, 'Auprc': 0, 'Loss': 0, 'MRR': 0, 'Hits@': 0}
 
         rng_batch = np.random.RandomState(seed)
+        n_train = len(train_triplets)
+        use_minibatch = args.neg_batch_size > 0 and n_train > args.neg_batch_size
+        steps_per_epoch = (n_train + args.neg_batch_size - 1) // args.neg_batch_size if use_minibatch else 1
 
         with trange(1, args.epochs + 1, desc=f'Run {run_i}') as pbar:
             for epoch in pbar:
-                # Optional mini-batch subsampling of positive triples
-                if args.neg_batch_size > 0 and len(train_triplets) > args.neg_batch_size:
-                    idx = rng_batch.choice(len(train_triplets), size=args.neg_batch_size, replace=False)
-                    batch_triplets = train_triplets[idx]
-                else:
-                    batch_triplets = train_triplets
+                if use_minibatch:
+                    # Iterate over ALL mini-batches within the epoch (proper mini-batch training)
+                    perm = rng_batch.permutation(n_train)
+                    train_m = None
+                    for step in range(steps_per_epoch):
+                        start = step * args.neg_batch_size
+                        end   = min(start + args.neg_batch_size, n_train)
+                        batch_triplets = train_triplets[perm[start:end]]
 
-                # Negative sampling
-                if args.negative_sampling == 'filtered':
-                    neg_trips, neg_labels = neg_sampler(
-                        batch_triplets, all_entities_arr, args.negative_rate,
-                        all_true_arr, seed=seed + epoch
+                        if args.negative_sampling == 'filtered':
+                            neg_trips, neg_labels = neg_sampler(
+                                batch_triplets, all_entities_arr, args.negative_rate,
+                                all_true_arr, seed=seed + epoch * steps_per_epoch + step
+                            )
+                        else:
+                            neg_trips, neg_labels = neg_sampler(batch_triplets, args.negative_rate)
+                        neg_trips, neg_labels = neg_trips.to(device), neg_labels.to(device)
+
+                        train_m = train_step(
+                            encoder, decoder, optimizer, mp['grad_norm'], mp['regularization'],
+                            features, train_index, neg_trips, neg_labels,
+                            **loss_kwargs, **encoder_kwargs
+                        )
+                else:
+                    # Full-batch: one gradient step over all training triples
+                    if args.negative_sampling == 'filtered':
+                        neg_trips, neg_labels = neg_sampler(
+                            train_triplets, all_entities_arr, args.negative_rate,
+                            all_true_arr, seed=seed + epoch
+                        )
+                    else:
+                        neg_trips, neg_labels = neg_sampler(train_triplets, args.negative_rate)
+                    neg_trips, neg_labels = neg_trips.to(device), neg_labels.to(device)
+
+                    train_m = train_step(
+                        encoder, decoder, optimizer, mp['grad_norm'], mp['regularization'],
+                        features, train_index, neg_trips, neg_labels,
+                        **loss_kwargs, **encoder_kwargs
                     )
-                else:
-                    neg_trips, neg_labels = neg_sampler(batch_triplets, args.negative_rate)
 
-                neg_trips, neg_labels = neg_trips.to(device), neg_labels.to(device)
-
-                # Train
-                train_m = train_step(
-                    encoder, decoder, optimizer, mp['grad_norm'], mp['regularization'],
-                    features, train_index, neg_trips, neg_labels,
-                    **loss_kwargs, **encoder_kwargs
-                )
-                scheduler.step()
+                scheduler.step()  # once per epoch
 
                 # Validate
                 if epoch % args.evaluate_every == 0:
@@ -565,8 +593,16 @@ def main(args):
                         **encoder_kwargs
                     )
 
-                    if val_metrics['Loss'] < best_val_loss - args.min_delta:
+                    # Benchmarks: monitor val MRR (proxy for ranking quality).
+                    # Custom datasets: monitor val loss (stable proxy for focal/bce).
+                    val_improved = (
+                        val_metrics.get('MRR', 0) > best_val_mrr
+                        if is_benchmark
+                        else val_metrics['Loss'] < best_val_loss - args.min_delta
+                    )
+                    if val_improved:
                         best_val_loss = val_metrics['Loss']
+                        best_val_mrr  = val_metrics.get('MRR', 0)
                         last_improvement = epoch
                         if save_path:
                             torch.save({
@@ -662,12 +698,12 @@ if __name__ == '__main__':
     parser.add_argument('--negative_rate', type=float, default=1)
     parser.add_argument('--neg_batch_size', type=int, default=0,
                         help='Mini-batch size for positive triples before negative sampling. '
-                             '0 = disabled (full batch). Use e.g. 4096 for large benchmarks.')
+                             '0 = disabled (full batch). Use e.g. 4096 or 2048 for large benchmarks.')
     parser.add_argument('--oversample_rate', type=int, default=5)
     parser.add_argument('--undersample_rate', type=float, default=0.5)
 
     # ── Loss function ──────────────────────────────────────────────────────────
-    parser.add_argument('--loss', type=str, default='auto',
+    parser.add_argument('--loss', type=str, default='focal',
                         choices=['bce', 'focal', 'margin', 'auto'],
                         help="Loss function. 'auto' = margin per TransE, focal per gli altri. "
                              "'bce' = BCE + label smoothing (CompGCN paper). "

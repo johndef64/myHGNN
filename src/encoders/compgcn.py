@@ -115,7 +115,10 @@ class CompGCNConv(Module):
             out = out + self.bias
         out = F.dropout(out, p=self.dropout, training=self.training)
 
-        return out
+        # Transform and return relation embeddings for the next layer
+        updated_rel_emb = self.w_rel(rel_emb)
+
+        return out, updated_rel_emb
 
 
 class CompGCNEncoder(nn.Module):
@@ -154,16 +157,9 @@ class CompGCNEncoder(nn.Module):
                 )
             offset += num_nodes_per_type[node_type]
 
-        # Layer-wise relation embeddings (including inverses)
-        self.relation_embeddings_per_layer = nn.ParameterList()
-        for idx in range(conv_num_layers):
-            in_dim = conv_hidden_channels[f'layer_{idx-1}'] if idx > 0 else mlp_out_emb_size
-            rel_emb = nn.Parameter(torch.Tensor(2 * num_relations, in_dim))
-            if opn == 'corr':
-                nn.init.eye_(rel_emb)
-            else:
-                nn.init.xavier_uniform_(rel_emb)
-            self.relation_embeddings_per_layer.append(rel_emb)
+        # Single initial relation embeddings (including inverses) — refined through layers like the original CompGCN
+        self.init_rel = nn.Parameter(torch.Tensor(2 * num_relations, mlp_out_emb_size))
+        nn.init.xavier_uniform_(self.init_rel)
 
         # CompGCN layers
         self.conv_layers = nn.ModuleList()
@@ -197,14 +193,12 @@ class CompGCNEncoder(nn.Module):
             x_all[offset:offset + self.num_nodes_per_type[node_type]] = emb
 
         x = x_all
+        rel_emb = self.init_rel  # relations flow and are refined through layers
         for layer_idx in range(self.layers_num):
-            rel_emb = self.relation_embeddings_per_layer[layer_idx]
-            x = self.conv_layers[layer_idx](x, rel_emb, edge_index)
+            x, rel_emb = self.conv_layers[layer_idx](x, rel_emb, edge_index)
             if layer_idx < self.layers_num - 1:
                 x = self.activation_function(x)
             if self.use_layer_norm:
                 x = self.layer_norms[layer_idx](x)
 
-        # Final relation embeddings for scoring
-        final_rel_emb = self.conv_layers[-1].w_rel(self.relation_embeddings_per_layer[-1])
-        return x, final_rel_emb
+        return x, rel_emb

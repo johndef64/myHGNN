@@ -6,6 +6,7 @@ Returns the same dict format as load_kg_dataset() so the training loop
 in train_link_prediction.py works without modification.
 """
 
+import os
 import numpy as np
 import torch
 
@@ -27,12 +28,14 @@ def load_lp_benchmark(name, root='dataset/', device='cpu'):
         dict matching the format returned by load_kg_dataset().
     """
     name = name.lower()
+    # Each benchmark gets its own subdirectory so their raw/ and processed/ folders
+    # don't collide when multiple datasets are loaded with the same root.
     if name == 'fb15k-237':
-        return _load_fb15k237(root, device)
+        return _load_fb15k237(os.path.join(root, 'fb15k-237'), device)
     elif name == 'wn18rr':
-        return _load_wn18rr(root, device)
+        return _load_wn18rr(os.path.join(root, 'wn18rr'), device)
     elif name == 'ogbl-biokg':
-        return _load_ogbl_biokg(root, device)
+        return _load_ogbl_biokg(os.path.join(root, 'ogbl-biokg'), device)
     else:
         raise ValueError(f"Unknown benchmark '{name}'. Choose from: {LP_BENCHMARK_DATASETS}")
 
@@ -62,24 +65,70 @@ def _load_fb15k237(root, device):
 
 
 def _load_wn18rr(root, device):
-    from torch_geometric.datasets import WordNet18RR
+    """
+    Load WN18RR directly from raw TSV files, bypassing PyG's WordNet18RR
+    loader which has a known parsing bug with some versions of the downloaded file.
+    Downloads the raw files from the canonical source if not present.
+    """
+    import urllib.request
+
+    raw_dir = os.path.join(root, 'raw')
+    os.makedirs(raw_dir, exist_ok=True)
+
+    base_url = ('https://raw.githubusercontent.com/villmow/datasets_knowledge_embedding'
+                '/master/WN18RR/original/')
+    splits = {'train': 'train.txt', 'valid': 'valid.txt', 'test': 'test.txt'}
+
+    for split, fname in splits.items():
+        fpath = os.path.join(raw_dir, fname)
+        if not os.path.exists(fpath):
+            url = base_url + fname
+            print(f'[i] Downloading WN18RR {split} from {url}')
+            urllib.request.urlretrieve(url, fpath)
 
     print('[i] Loading WN18RR...')
-    dataset = WordNet18RR(root=root)
-    data = dataset[0]
 
-    # data.edge_index [2, total], data.edge_type [total]
-    # data.train_mask, data.val_mask, data.test_mask (boolean edge masks)
-    ei = data.edge_index  # [2, N]
-    et = data.edge_type   # [N]
+    def _parse_file(fpath):
+        triples = []
+        with open(fpath, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                parts = line.split('\t')
+                if len(parts) != 3:
+                    parts = line.split()   # fallback: whitespace-separated
+                if len(parts) != 3:
+                    continue
+                triples.append(parts)
+        return triples
 
-    all_triplets = torch.stack([ei[0], et, ei[1]], dim=1).long()
+    train_raw = _parse_file(os.path.join(raw_dir, 'train.txt'))
+    val_raw   = _parse_file(os.path.join(raw_dir, 'valid.txt'))
+    test_raw  = _parse_file(os.path.join(raw_dir, 'test.txt'))
 
-    train_t = all_triplets[data.train_mask]
-    val_t   = all_triplets[data.val_mask]
-    test_t  = all_triplets[data.test_mask]
+    all_raw = train_raw + val_raw + test_raw
 
-    num_original_relations = 11
+    # Build entity and relation id maps from the full corpus
+    ent2id = {}
+    rel2id = {}
+    for h, r, t in all_raw:
+        ent2id.setdefault(h, len(ent2id))
+        ent2id.setdefault(t, len(ent2id))
+        rel2id.setdefault(r, len(rel2id))
+
+    def _to_tensor(raw):
+        return torch.tensor(
+            [[ent2id[h], rel2id[r], ent2id[t]] for h, r, t in raw],
+            dtype=torch.long
+        )
+
+    train_t = _to_tensor(train_raw)
+    val_t   = _to_tensor(val_raw)
+    test_t  = _to_tensor(test_raw)
+
+    num_original_relations = len(rel2id)  # should be 11
+    print(f'[i] WN18RR: {len(ent2id)} entities, {num_original_relations} relations')
 
     return _build_lp_output(train_t, val_t, test_t, num_original_relations)
 

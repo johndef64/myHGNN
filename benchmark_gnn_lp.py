@@ -116,7 +116,7 @@ def _make_encoder_kwargs(model_name, train_index):
 # ─── Single experiment ────────────────────────────────────────────────────────
 
 def run_experiment(benchmark, model_name, config_name, runs, epochs, patience,
-                   neg_batch_size, evaluate_every):
+                   neg_batch_size, evaluate_every, negative_rate):
     """Train and evaluate one (benchmark, model) combination. Returns metrics dict."""
 
     loss_kwargs = dict(
@@ -167,36 +167,73 @@ def run_experiment(benchmark, model_name, config_name, runs, epochs, patience,
             optimizer, gamma=mp.get('scheduler_gamma', 0.995)
         )
 
-        best_val_loss = float('inf')
+        best_val_mrr = -1.0
         last_improvement = 0
         best_state = None
         rng_batch = np.random.RandomState(seed)
 
+        n_train = len(train_triplets)
+        use_minibatch = neg_batch_size > 0 and n_train > neg_batch_size
+        steps_per_epoch = (n_train + neg_batch_size - 1) // neg_batch_size if use_minibatch else 1
+
         with trange(1, epochs + 1, desc=f'    {benchmark}/{model_name}') as pbar:
             for epoch in pbar:
-                # Mini-batch positive subsampling (optional, useful for large benchmarks)
-                if neg_batch_size > 0 and len(train_triplets) > neg_batch_size:
-                    idx = rng_batch.choice(len(train_triplets), size=neg_batch_size, replace=False)
-                    batch_triplets = train_triplets[idx]
+                if use_minibatch:
+                    """
+                    per ogni epoch:
+                        ├── se neg_batch_size > 0:
+                        │     shuffle del dataset
+                        │     per ogni mini-batch (tutti):  ← nuovo inner loop
+                        │         neg sampling + train_step
+                        └── altrimenti:
+                            1 step su tutto il dataset
+                        
+                        scheduler.step()  ← 1 volta per epoch
+                        ogni evaluate_every epoch: validation
+
+                    Avvertimento: con neg_batch_size piccolo su WN18RR, ogni epoch fa ~42 gradient step (87K/2048), ognuno con una forward pass sull'intero grafo (il message passing gira sempre sull'intera struttura). Questo è 42x più lento per epoch rispetto al full batch. Il guadagno in memoria c'è, ma il tempo aumenta.
+
+                    Per WN18RR usa comunque --neg_batch_size 0 (full batch) — è veloce e non va in OOM. Il mini-batch con inner loop ha senso su FB15k-237 se 272K × 51 = 14M triple dovesse andare in OOM.
+                    """
+                    # Shuffle once per epoch, then iterate over all mini-batches
+                    perm = rng_batch.permutation(n_train)
+                    train_m = None
+                    for step in range(steps_per_epoch):
+                        start = step * neg_batch_size
+                        end = min(start + neg_batch_size, n_train)
+                        batch_triplets = train_triplets[perm[start:end]]
+
+                        neg_trips, neg_labels = negative_sampling_filtered(
+                            batch_triplets, all_entities_arr, negative_rate,
+                            all_true_arr, seed=seed + epoch * steps_per_epoch + step
+                        )
+                        neg_trips, neg_labels = neg_trips.to(device), neg_labels.to(device)
+
+                        train_m = train_step(
+                            encoder, decoder, optimizer, mp['grad_norm'], reg_param,
+                            features, train_index, neg_trips, neg_labels,
+                            **loss_kwargs, **encoder_kwargs,
+                        )
                 else:
-                    batch_triplets = train_triplets
+                    # Full-batch: 1 step covers all training triples
+                    neg_trips, neg_labels = negative_sampling_filtered(
+                        train_triplets, all_entities_arr, negative_rate,
+                        all_true_arr, seed=seed + epoch
+                    )
+                    neg_trips, neg_labels = neg_trips.to(device), neg_labels.to(device)
 
-                neg_trips, neg_labels = negative_sampling_filtered(
-                    batch_triplets, all_entities_arr, 1, all_true_arr, seed=seed + epoch
-                )
-                neg_trips, neg_labels = neg_trips.to(device), neg_labels.to(device)
+                    train_m = train_step(
+                        encoder, decoder, optimizer, mp['grad_norm'], reg_param,
+                        features, train_index, neg_trips, neg_labels,
+                        **loss_kwargs, **encoder_kwargs,
+                    )
 
-                train_m = train_step(
-                    encoder, decoder, optimizer, mp['grad_norm'], reg_param,
-                    features, train_index, neg_trips, neg_labels,
-                    **loss_kwargs, **encoder_kwargs,
-                )
-                scheduler.step()
+                scheduler.step()  # once per epoch regardless of mini-batch count
 
                 # Validation: sampled MRR (fast proxy during training)
                 if epoch % evaluate_every == 0:
                     val_neg, val_lab = negative_sampling_filtered(
-                        val_triplets, all_entities_arr, 1, all_true_arr, seed=seed + 1000
+                        val_triplets, all_entities_arr, negative_rate, all_true_arr, seed=seed + 1000
                     )
                     val_neg, val_lab = val_neg.to(device), val_lab.to(device)
 
@@ -208,9 +245,8 @@ def run_experiment(benchmark, model_name, config_name, runs, epochs, patience,
                         use_type_constrained=use_type_constrained,
                         **encoder_kwargs,
                     )
-
-                    if val_m['Loss'] < best_val_loss:
-                        best_val_loss = val_m['Loss']
+                    if val_m.get('MRR', 0) > best_val_mrr:
+                        best_val_mrr = val_m['MRR']
                         last_improvement = epoch
                         best_state = {
                             'encoder': {k: v.cpu().clone()
@@ -354,6 +390,7 @@ def main(args):
                     patience=args.patience,
                     neg_batch_size=args.neg_batch_size,
                     evaluate_every=args.evaluate_every,
+                    negative_rate=args.negative_rate,
                 )
                 results[f'{benchmark}/{model}'] = r
 
@@ -392,12 +429,17 @@ if __name__ == '__main__':
                         help='Number of runs per experiment (default: 1)')
     parser.add_argument('--epochs', type=int, default=500,
                         help='Max training epochs (default: 500)')
-    parser.add_argument('--patience', type=int, default=50,
-                        help='Early stopping patience in epochs (default: 50)')
+    parser.add_argument('--patience', type=int, default=200,
+                        help='Early stopping patience in epochs (default: 200)')
     parser.add_argument('--evaluate_every', type=int, default=10,
                         help='Validate every N epochs (default: 10)')
     parser.add_argument('--neg_batch_size', type=int, default=0,
-                        help='Positive batch size before neg sampling. '
-                             '0=full batch. Use e.g. 4096 for ogbl-biokg. (default: 0)')
+                        help='Positive batch size before neg sampling per epoch. '
+                             '0=full batch (recommended for WN18RR/FB15k-237). '
+                             'Use e.g. 4096 only if you get OOM. (default: 0)')
+    parser.add_argument('--negative_rate', type=int, default=50,
+                        help='Negatives per positive during training. '
+                             'Higher = better training signal but more memory. '
+                             'CompGCN paper uses 1-vs-All (~14K for FB15k-237). (default: 50)')
     args = parser.parse_args()
     main(args)
